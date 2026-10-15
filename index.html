@@ -1,534 +1,255 @@
-<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8" />
-<title>Bob Space Program</title>
-<meta name="viewport" content="width=device-width,initial-scale=1" />
-<style>
-  * { box-sizing: border-box; }
-  html, body {
-    margin: 0; height: 100%; overflow: hidden;
-    background: #020813; color: #ebf3ff;
-    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
-  }
-  #app {
-    display: flex; width: 100vw; height: 100vh;
-  }
-  #sidebar {
-    width: 340px; background: rgba(6, 12, 22, 0.9);
-    border-right: 1px solid rgba(255,255,255,0.06);
-    padding: 12px 12px 18px 12px; overflow: auto;
-  }
-  #viewportWrap {
-    position: relative; flex: 1; background: black;
-  }
-  #viewport {
-    width: 100%; height: 100%; display: block;
-  }
-  .tabbar {
-    display: flex; gap: 6px; margin-bottom: 12px;
-  }
-  .tab {
-    flex: 1; text-align: center; padding: 8px;
-    background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06);
-    border-radius: 6px; cursor: pointer; user-select: none;
-  }
-  .tab.active {
-    background: #14314f; border-color: rgba(255,255,255,0.12);
-  }
-  .panel { display: none; }
-  .panel.active { display: block; }
-  .row { display: flex; justify-content: space-between; align-items: center; margin: 6px 0; }
-  .small { font-size: 12px; opacity: 0.8; }
-  .buttonRow { display: flex; gap: 8px; flex-wrap: wrap; }
-  button, select, input {
-    background: #122337; color: white; border: 1px solid rgba(255,255,255,0.08);
-    border-radius: 6px; padding: 7px 8px; font-size: 13px;
-    cursor: pointer;
-  }
-  #partsPalette {
-    display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px;
-  }
-  .partButton {
-    width: 92px; padding: 8px 4px; border-radius: 6px;
-    background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06);
-    cursor: pointer; text-align: center; font-size: 12px;
-  }
-  #assemblyList {
-    min-height: 120px; background: rgba(255,255,255,0.02);
-    border-radius: 8px; padding: 8px; border: 1px solid rgba(255,255,255,0.04);
-    display: flex; flex-direction: column; gap: 4px;
-  }
-  .assemblyItem {
-    display:flex; justify-content:space-between; align-items:center;
-    padding: 6px 4px; border-bottom: 1px dashed rgba(255,255,255,0.05);
-    background: rgba(255,255,255,0.01); border-radius: 4px;
-  }
-  .assemblyItem:last-child { border-bottom: none; }
-  .removePartBtn {
-    background: #4a1515; border: none; padding: 2px 6px; border-radius: 4px; font-size: 11px;
-  }
-  .hud {
-    position: absolute; left: 12px; top: 12px; z-index: 5;
-    background: rgba(7, 13, 18, 0.75); border: 1px solid rgba(255,255,255,0.08);
-    border-radius: 8px; padding: 8px 10px; font-size: 12px;
-    pointer-events: none;
-  }
-</style>
-</head>
-<body>
-<div id="app">
-  <div id="sidebar">
-    <div class="tabbar">
-      <div class="tab active" data-tab="hangar">VAB</div>
-      <div class="tab" data-tab="flight">Flight</div>
-      <div class="tab" data-tab="planner">Maneuvers</div>
-    </div>
-
-    <div id="hangar" class="panel active">
-      <div class="row"><strong>Vehicle Assembly</strong></div>
-      <div class="row"><span>Parts</span></div>
-      <div id="partsPalette"></div>
-
-      <div class="row" style="margin-top:12px"><span>Assembly (Top to Bottom)</span></div>
-      <div id="assemblyList"></div>
-
-      <div class="buttonRow" style="margin-top:10px">
-        <button id="saveDesign">Save</button>
-        <button id="loadDesign">Load</button>
-        <button id="launchBtn">Launch</button>
-      </div>
-
-      <div style="margin-top:10px; line-height:1.8">
-        <div class="row"><span>Mass</span><span id="massStat">0 kg</span></div>
-        <div class="row"><span>Thrust</span><span id="thrustStat">0 N</span></div>
-        <div class="row"><span>Fuel</span><span id="fuelStat">0 kg</span></div>
-        <div class="row"><span>CoM</span><span id="comStat">0 m</span></div>
-      </div>
-    </div>
-
-    <div id="flight" class="panel">
-      <div class="row"><strong>Flight Controls</strong></div>
-
-      <div class="row">
-        <span>Planet</span>
-        <select id="planetSelect"></select>
-      </div>
-
-      <div class="row"><span>Throttle</span><span id="throttleStat">0%</span></div>
-      <div class="row"><span>Altitude</span><span id="altStat">0 m</span></div>
-      <div class="row"><span>Speed</span><span id="speedStat">0 m/s</span></div>
-      <div class="row"><span>Fuel Left</span><span id="fuelFlight">0 kg</span></div>
-
-      <div class="buttonRow" style="margin-top:10px">
-        <button id="stageBtn">Stage / Fire Engine</button>
-        <button id="abortBtn">Recover Vessel</button>
-      </div>
-
-      <div class="row" style="margin-top:8px">
-        <span>Quality</span>
-        <select id="qualitySelect">
-          <option value="high">High</option>
-          <option value="med">Medium</option>
-          <option value="low">Low</option>
-        </select>
-      </div>
-
-      <div class="small" style="margin-top:8px">
-        Controls: W/S throttle, A/D rotate pitch, Space stage
-      </div>
-    </div>
-
-    <div id="planner" class="panel">
-      <div class="row"><strong>Maneuver Planner</strong></div>
-      <div class="buttonRow">
-        <button id="createNodeBtn">Create Node</button>
-        <button id="execNodesBtn">Execute</button>
-      </div>
-      <div id="nodesList" style="margin-top:10px; min-height:80px;"></div>
-    </div>
-  </div>
-
-  <div id="viewportWrap">
-    <div class="hud">
-      <div>Vessel: <span id="vesselName">Bob-1</span></div>
-      <div>Mode: <span id="modeLabel">Hangar</span></div>
-    </div>
-    <canvas id="viewport"></canvas>
-  </div>
-</div>
-
-<script src="https://unpkg.com/three@0.158.0/build/three.min.js"></script>
-<script>
-(() => {
-  const PARTS = [
-    { id: "cmd", name: "Command Pod", dry: 420, fuel: 0, thrust: 0, isp: 0, area: 1.0, cd: 0.3, type: "cmd", color: 0x94a3b8 },
-    { id: "tank", name: "Fuel Tank", dry: 220, fuel: 800, thrust: 0, isp: 0, area: 1.2, cd: 0.45, type: "tank", color: 0xffffff },
-    { id: "engine", name: "Engine", dry: 260, fuel: 0, thrust: 22000, isp: 320, area: 0.7, cd: 0.5, type: "engine", color: 0x334155 },
-    { id: "wing", name: "Wing", dry: 170, fuel: 0, thrust: 0, isp: 0, area: 2.2, cd: 0.04, type: "wing", color: 0xe2e8f0 },
-    { id: "fin", name: "Tail Fin", dry: 70, fuel: 0, thrust: 0, isp: 0, area: 0.6, cd: 0.08, type: "control", color: 0xf1f5f9 }
-  ];
-
-  const DEFAULT_ASSEMBLY = [
-    { partId: "cmd" },
-    { partId: "tank" },
-    { partId: "engine" }
-  ];
-
-  const PLANETS = [
-    { id: "earth", name: "Kerbin-like Earth", mu: 3.986e14, radius: 6371000, atmosphere: 120000, rho0: 1.225, scaleHeight: 8500 },
-    { id: "moon", name: "Mun-like Moon", mu: 4.904e12, radius: 1737400, atmosphere: 0, rho0: 0, scaleHeight: 1 }
-  ];
-
-  let assembly = [];
-  let currentPlanet = PLANETS[0];
-  let throttle = 0; 
-  let mode = "hangar"; // "hangar" or "flight"
-
-  // Flight State Variables
-  let flightState = {
-    posX: 0, posY: 6371000 + 10, // Start just above radius
-    velX: 0, velY: 0,
-    rotation: Math.PI / 2, // Facing straight up up
-    currentFuel: 0,
-    totalMass: 0,
-    vesselThrust: 0
-  };
-
-  const els = {
-    massStat: document.getElementById("massStat"),
-    thrustStat: document.getElementById("thrustStat"),
-    fuelStat: document.getElementById("fuelStat"),
-    comStat: document.getElementById("comStat"),
-    partsPalette: document.getElementById("partsPalette"),
-    assemblyList: document.getElementById("assemblyList"),
-    throttleStat: document.getElementById("throttleStat"),
-    altStat: document.getElementById("altStat"),
-    speedStat: document.getElementById("speedStat"),
-    fuelFlight: document.getElementById("fuelFlight"),
-    planetSelect: document.getElementById("planetSelect"),
-    vesselName: document.getElementById("vesselName"),
-    modeLabel: document.getElementById("modeLabel"),
-    nodesList: document.getElementById("nodesList"),
-    launchBtn: document.getElementById("launchBtn"),
-    stageBtn: document.getElementById("stageBtn"),
-    abortBtn: document.getElementById("abortBtn")
-  };
-
-  // --- THREE.JS GRAPHICS SETUP ---
-  const canvas = document.getElementById("viewport");
-  const renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true });
-  const scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x020813);
-
-  const camera = new THREE.PerspectiveCamera(60, 1, 0.1, 1000);
-  camera.position.set(0, 0, 8);
-
-  const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
-  scene.add(ambientLight);
-  const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
-  dirLight.position.set(5, 10, 7);
-  scene.add(dirLight);
-
-  const vesselGroup = new THREE.Group();
-  scene.add(vesselGroup);
-
-  // Background celestial markers for flight visual reference
-  const starsGeo = new THREE.BufferGeometry();
-  const starsCount = 500;
-  const starsPos = new Float32Array(starsCount * 3);
-  for(let i=0; i<starsCount*3; i++) starsPos[i] = (Math.random() - 0.5) * 500;
-  starsGeo.setAttribute('position', new THREE.BufferAttribute(starsPos, 3));
-  const starsMat = new THREE.PointsMaterial({color: 0xffffff, size: 1});
-  const starPoints = new THREE.Points(starsGeo, starsMat);
-  scene.add(starPoints);
-
-  // --- TABBING AND SIDEBAR SYSTEM ---
-  document.querySelectorAll(".tab").forEach(tab => {
-    tab.addEventListener("click", () => {
-      const targetTab = tab.getAttribute("data-tab");
-      if (mode === "hangar" && targetTab !== "hangar" && targetTab !== "planner") {
-        alert("Launch your rocket first to unlock the Flight display!");
-        return;
-      }
-      switchTab(targetTab);
-    });
-  });
-
-  function switchTab(tabId) {
-    document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
-    document.querySelectorAll(".panel").forEach(p => p.classList.remove("active"));
-    
-    const activeTab = document.querySelector(`.tab[data-tab="${tabId}"]`);
-    const activePanel = document.getElementById(tabId);
-    if(activeTab) activeTab.classList.add('active');
-<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8" />
-<title>Bob Space Program</title>
-<meta name="viewport" content="width=device-width,initial-scale=1" />
-<style>
-  * { box-sizing: border-box; }
-  html, body {
-    margin: 0; height: 100%; overflow: hidden;
-    background: #020813; color: #ebf3ff;
-    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
-  }
-  #app {
-    display: flex; width: 100vw; height: 100vh;
-  }
-  #sidebar {
-    width: 340px; background: rgba(6, 12, 22, 0.9);
-    border-right: 1px solid rgba(255,255,255,0.06);
-    padding: 12px 12px 18px 12px; overflow: auto;
-  }
-  #viewportWrap {
-    position: relative; flex: 1; background: black;
-  }
-  #viewport {
-    width: 100%; height: 100%; display: block;
-  }
-  .tabbar {
-    display: flex; gap: 6px; margin-bottom: 12px;
-  }
-  .tab {
-    flex: 1; text-align: center; padding: 8px;
-    background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06);
-    border-radius: 6px; cursor: pointer; user-select: none;
-  }
-  .tab.active {
-    background: #14314f; border-color: rgba(255,255,255,0.12);
-  }
-  .panel { display: none; }
-  .panel.active { display: block; }
-  .row { display: flex; justify-content: space-between; align-items: center; margin: 6px 0; }
-  .small { font-size: 12px; opacity: 0.8; }
-  .buttonRow { display: flex; gap: 8px; flex-wrap: wrap; }
-  button, select, input {
-    background: #122337; color: white; border: 1px solid rgba(255,255,255,0.08);
-    border-radius: 6px; padding: 7px 8px; font-size: 13px;
-    cursor: pointer;
-  }
-  #partsPalette {
-    display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px;
-  }
-  .partButton {
-    width: 92px; padding: 8px 4px; border-radius: 6px;
-    background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06);
-    cursor: pointer; text-align: center; font-size: 12px;
-  }
-  #assemblyList {
-    min-height: 120px; background: rgba(255,255,255,0.02);
-    border-radius: 8px; padding: 8px; border: 1px solid rgba(255,255,255,0.04);
-    display: flex; flex-direction: column; gap: 4px;
-  }
-  .assemblyItem {
-    display:flex; justify-content:space-between; align-items:center;
-    padding: 6px 4px; border-bottom: 1px dashed rgba(255,255,255,0.05);
-    background: rgba(255,255,255,0.01); border-radius: 4px;
-  }
-  .assemblyItem:last-child { border-bottom: none; }
-  .removePartBtn {
-    background: #4a1515; border: none; padding: 2px 6px; border-radius: 4px; font-size: 11px;
-  }
-  .hud {
-    position: absolute; left: 12px; top: 12px; z-index: 5;
-    background: rgba(7, 13, 18, 0.75); border: 1px solid rgba(255,255,255,0.08);
-    border-radius: 8px; padding: 8px 10px; font-size: 12px;
-    pointer-events: none;
-  }
-</style>
-</head>
-<body>
-<div id="app">
-  <div id="sidebar">
-    <div class="tabbar">
-      <div class="tab active" data-tab="hangar">VAB</div>
-      <div class="tab" data-tab="flight">Flight</div>
-      <div class="tab" data-tab="planner">Maneuvers</div>
-    </div>
-
-    <div id="hangar" class="panel active">
-      <div class="row"><strong>Vehicle Assembly</strong></div>
-      <div class="row"><span>Parts</span></div>
-      <div id="partsPalette"></div>
-
-      <div class="row" style="margin-top:12px"><span>Assembly (Top to Bottom)</span></div>
-      <div id="assemblyList"></div>
-
-      <div class="buttonRow" style="margin-top:10px">
-        <button id="saveDesign">Save</button>
-        <button id="loadDesign">Load</button>
-        <button id="launchBtn">Launch</button>
-      </div>
-
-      <div style="margin-top:10px; line-height:1.8">
-        <div class="row"><span>Mass</span><span id="massStat">0 kg</span></div>
-        <div class="row"><span>Thrust</span><span id="thrustStat">0 N</span></div>
-        <div class="row"><span>Fuel</span><span id="fuelStat">0 kg</span></div>
-        <div class="row"><span>CoM</span><span id="comStat">0 m</span></div>
-      </div>
-    </div>
-
-    <div id="flight" class="panel">
-      <div class="row"><strong>Flight Controls</strong></div>
-
-      <div class="row">
-        <span>Planet</span>
-        <select id="planetSelect"></select>
-      </div>
-
-      <div class="row"><span>Throttle</span><span id="throttleStat">0%</span></div>
-      <div class="row"><span>Altitude</span><span id="altStat">0 m</span></div>
-      <div class="row"><span>Speed</span><span id="speedStat">0 m/s</span></div>
-      <div class="row"><span>Fuel Left</span><span id="fuelFlight">0 kg</span></div>
-
-      <div class="buttonRow" style="margin-top:10px">
-        <button id="stageBtn">Stage / Fire Engine</button>
-        <button id="abortBtn">Recover Vessel</button>
-      </div>
-
-      <div class="row" style="margin-top:8px">
-        <span>Quality</span>
-        <select id="qualitySelect">
-          <option value="high">High</option>
-          <option value="med">Medium</option>
-          <option value="low">Low</option>
-        </select>
-      </div>
-
-      <div class="small" style="margin-top:8px">
-        Controls: W/S throttle, A/D rotate pitch, Space stage
-      </div>
-    </div>
-
-    <div id="planner" class="panel">
-      <div class="row"><strong>Maneuver Planner</strong></div>
-      <div class="buttonRow">
-        <button id="createNodeBtn">Create Node</button>
-        <button id="execNodesBtn">Execute</button>
-      </div>
-      <div id="nodesList" style="margin-top:10px; min-height:80px;"></div>
-    </div>
-  </div>
-
-  <div id="viewportWrap">
-    <div class="hud">
-      <div>Vessel: <span id="vesselName">Bob-1</span></div>
-      <div>Mode: <span id="modeLabel">Hangar</span></div>
-    </div>
-    <canvas id="viewport"></canvas>
-  </div>
-</div>
-
-<script src="https://unpkg.com/three@0.158.0/build/three.min.js"></script>
-<script>
-(() => {
-  const PARTS = [
-    { id: "cmd", name: "Command Pod", dry: 420, fuel: 0, thrust: 0, isp: 0, area: 1.0, cd: 0.3, type: "cmd", color: 0x94a3b8 },
-    { id: "tank", name: "Fuel Tank", dry: 220, fuel: 800, thrust: 0, isp: 0, area: 1.2, cd: 0.45, type: "tank", color: 0xffffff },
-    { id: "engine", name: "Engine", dry: 260, fuel: 0, thrust: 22000, isp: 320, area: 0.7, cd: 0.5, type: "engine", color: 0x334155 },
-    { id: "wing", name: "Wing", dry: 170, fuel: 0, thrust: 0, isp: 0, area: 2.2, cd: 0.04, type: "wing", color: 0xe2e8f0 },
-    { id: "fin", name: "Tail Fin", dry: 70, fuel: 0, thrust: 0, isp: 0, area: 0.6, cd: 0.08, type: "control", color: 0xf1f5f9 }
-  ];
-
-  const DEFAULT_ASSEMBLY = [
-    { partId: "cmd" },
-    { partId: "tank" },
-    { partId: "engine" }
-  ];
-
-  const PLANETS = [
-    { id: "earth", name: "Kerbin-like Earth", mu: 3.986e14, radius: 6371000, atmosphere: 120000, rho0: 1.225, scaleHeight: 8500 },
-    { id: "moon", name: "Mun-like Moon", mu: 4.904e12, radius: 1737400, atmosphere: 0, rho0: 0, scaleHeight: 1 }
-  ];
-
-  let assembly = [];
-  let currentPlanet = PLANETS[0];
-  let throttle = 0; 
-  let mode = "hangar"; // "hangar" or "flight"
-
-  // Flight State Variables
-  let flightState = {
-    posX: 0, posY: 6371000 + 10, // Start just above radius
-    velX: 0, velY: 0,
-    rotation: Math.PI / 2, // Facing straight up up
-    currentFuel: 0,
-    totalMass: 0,
-    vesselThrust: 0
-  };
-
-  const els = {
-    massStat: document.getElementById("massStat"),
-    thrustStat: document.getElementById("thrustStat"),
-    fuelStat: document.getElementById("fuelStat"),
-    comStat: document.getElementById("comStat"),
-    partsPalette: document.getElementById("partsPalette"),
-    assemblyList: document.getElementById("assemblyList"),
-    throttleStat: document.getElementById("throttleStat"),
-    altStat: document.getElementById("altStat"),
-    speedStat: document.getElementById("speedStat"),
-    fuelFlight: document.getElementById("fuelFlight"),
-    planetSelect: document.getElementById("planetSelect"),
-    vesselName: document.getElementById("vesselName"),
-    modeLabel: document.getElementById("modeLabel"),
-    nodesList: document.getElementById("nodesList"),
-    launchBtn: document.getElementById("launchBtn"),
-    stageBtn: document.getElementById("stageBtn"),
-    abortBtn: document.getElementById("abortBtn")
-  };
-
-  // --- THREE.JS GRAPHICS SETUP ---
-  const canvas = document.getElementById("viewport");
-  const renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true });
-  const scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x020813);
-
-  const camera = new THREE.PerspectiveCamera(60, 1, 0.1, 1000);
-  camera.position.set(0, 0, 8);
-
-  const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
-  scene.add(ambientLight);
-  const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
-  dirLight.position.set(5, 10, 7);
-  scene.add(dirLight);
-
-  const vesselGroup = new THREE.Group();
-  scene.add(vesselGroup);
-
-  // Background celestial markers for flight visual reference
-  const starsGeo = new THREE.BufferGeometry();
-  const starsCount = 500;
-  const starsPos = new Float32Array(starsCount * 3);
-  for(let i=0; i<starsCount*3; i++) starsPos[i] = (Math.random() - 0.5) * 500;
-  starsGeo.setAttribute('position', new THREE.BufferAttribute(starsPos, 3));
-  const starsMat = new THREE.PointsMaterial({color: 0xffffff, size: 1});
-  const starPoints = new THREE.Points(starsGeo, starsMat);
-  scene.add(starPoints);
-
-  // --- TABBING AND SIDEBAR SYSTEM ---
-  document.querySelectorAll(".tab").forEach(tab => {
-    tab.addEventListener("click", () => {
-      const targetTab = tab.getAttribute("data-tab");
-      if (mode === "hangar" && targetTab !== "hangar" && targetTab !== "planner") {
-        alert("Launch your rocket first to unlock the Flight display!");
-        return;
-      }
-      switchTab(targetTab);
-    });
-  });
-
-  function switchTab(tabId) {
-    document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
-    document.querySelectorAll(".panel").forEach(p => p.classList.remove("active"));
-    
-    const activeTab = document.querySelector(`.tab[data-tab="${tabId}"]`);
-    const activePanel = document.getElementById(tabId);
-    if(activeTab) activeTab.classList.add('active');
-   if(activePanel) activePanel.classList.add('active');
+{ box-sizing: border-box; }
+html, body {
+margin: 0; height: 100%; overflow: hidden;
+background: #020813; color: #ebf3ff;
+font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
 }
-// --- VEHICLE ASSEMBLY ENGINE ---
+#app {
+display: flex; width: 100vw; height: 100vh;
+}
+#sidebar {
+width: 340px; background: rgba(6, 12, 22, 0.9);
+border-right: 1px solid rgba(255,255,255,0.06);
+padding: 12px 12px 18px 12px; overflow: auto;
+z-index: 10;
+}
+#viewportWrap {
+position: relative; flex: 1; background: black;
+}
+#viewport {
+width: 100%; height: 100%; display: block;
+}
+.tabbar {
+display: flex; gap: 6px; margin-bottom: 12px;
+}
+.tab {
+flex: 1; text-align: center; padding: 8px;
+background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06);
+border-radius: 6px; cursor: pointer; user-select: none;
+}
+.tab.active {
+background: #14314f; border-color: rgba(255,255,255,0.12);
+}
+.panel { display: none; }
+.panel.active { display: block; }
+.row { display: flex; justify-content: space-between; align-items: center; margin: 6px 0; }
+.small { font-size: 12px; opacity: 0.8; }
+.buttonRow { display: flex; gap: 8px; flex-wrap: wrap; }
+button, select, input {
+background: #122337; color: white; border: 1px solid rgba(255,255,255,0.08);
+border-radius: 6px; padding: 7px 8px; font-size: 13px;
+cursor: pointer;
+}
+#partsPalette {
+display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px;
+}
+.partButton {
+width: 96px; padding: 8px 4px; border-radius: 6px;
+background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06);
+cursor: pointer; text-align: center; font-size: 11px;
+color: #e2e8f0;
+}
+#assemblyList {
+min-height: 120px; background: rgba(255,255,255,0.02);
+border-radius: 8px; padding: 8px; border: 1px solid rgba(255,255,255,0.04);
+display: flex; flex-direction: column; gap: 4px;
+}
+.assemblyItem {
+display:flex; justify-content:space-between; align-items:center;
+padding: 6px 4px; border-bottom: 1px dashed rgba(255,255,255,0.05);
+background: rgba(255,255,255,0.01); border-radius: 4px;
+font-size: 12px;
+}
+.assemblyItem:last-child { border-bottom: none; }
+.removePartBtn {
+background: #4a1515; border: none; padding: 2px 6px; border-radius: 4px; font-size: 11px;
+}
+.hud {
+position: absolute; left: 12px; top: 12px; z-index: 5;
+background: rgba(7, 13, 18, 0.75); border: 1px solid rgba(255,255,255,0.08);
+border-radius: 8px; padding: 8px 10px; font-size: 12px;
+pointer-events: none;
+}
+
+
+
+
+
+
+VAB
+Flight
+Maneuvers
+Vehicle Assembly
+Click Parts to Stack (Top to Bottom)
+Assembly Tree Layout
+Clear
+LAUNCH
+Mass Total0 kg
+Thrust Active0 N
+Fuel Capacity0 kg
+Aerodynamic Cd0.00
+
+Flight SystemsThrottle0%
+Altitude0 m
+Surface Speed0 m/s
+Active Stage Fuel0 kg
+Atmosphere Density0%
+Drag Resistance0 NSTAGE [SPACE]
+
+
+Recover to VAB
+Keyboard Controls:
+• W / S : Increase / Decrease Throttle
+• A / D : Adjust Flight Pitch Angle Orientation
+• Spacebar : Trigger Next Separator Decoupler / Stage
+
+Maneuver Planner
+Orbital elements and tracking loops automatically switch active configurations once stable trajectory patterns intersect outside atmospheric margins.
+
+Vessel: Bob-1 Heavy
+Status: Hangar
+
+
+
+(() => {
+// Part database defining flight values and dry metrics
+const PARTS = [
+{ id: "parachute", name: "Parachute Mk1", dry: 80, fuel: 0, thrust: 0, area: 0.6, cd: 0.15, type: "parachute", color: 0xef4444 },
+{ id: "cmd", name: "Command Pod", dry: 400, fuel: 0, thrust: 0, area: 1.0, cd: 0.25, type: "cmd", color: 0x94a3b8 },
+{ id: "tank", name: "Fuel Tank Large", dry: 250, fuel: 1000, thrust: 0, area: 1.2, cd: 0.40, type: "tank", color: 0xf8fafc },
+{ id: "decoupler", name: "Stack Decoupler", dry: 60, fuel: 0, thrust: 0, area: 1.1, cd: 0.35, type: "decoupler", color: 0xf59e0b },
+{ id: "engine", name: "Liquid Engine", dry: 300, fuel: 0, thrust: 32000, area: 0.9, cd: 0.45, type: "engine", color: 0x475569 },
+{ id: "wing", name: "Aerodynamic Wing", dry: 120, fuel: 0, thrust: 0, area: 3.2, cd: 0.05, type: "wing", color: 0xcbd5e1 },
+{ id: "fin", name: "Stabilizer Fin", dry: 50, fuel: 0, thrust: 0, area: 0.9, cd: 0.06, type: "control", color: 0xe2e8f0 },
+{ id: "wheel", name: "Landing Wheel", dry: 70, fuel: 0, thrust: 0, area: 0.5, cd: 0.30, type: "wheel", color: 0x1e293b }
+];
+const DEFAULT_ASSEMBLY = [
+{ id: "parachute" },
+{ id: "cmd" },
+{ id: "tank" },
+{ id: "decoupler" },
+{ id: "tank" },
+{ id: "engine" }
+];
+// Earth scale simulation attributes scaled cleanly for mathematical stability
+const PLANET = {
+mu: 3.986e14,
+radius: 6371000,
+atmosphereHeight: 100000,
+rho0: 1.225,
+scaleHeight: 8000
+};
+let assembly = [];
+let throttle = 0;
+let mode = "hangar"; // "hangar" or "flight"
+// Structural simulation stages arrays tracking isolated stack configurations
+let stagesData = [];
+let currentStageIndex = 0;
+let flightState = {
+posX: 0, posY: PLANET.radius + 12,
+velX: 0, velY: 0,
+rotation: Math.PI / 2, // Facing upwards
+totalMass: 0,
+activeThrust: 0,
+activeFuel: 0,
+totalArea: 0,
+avgCd: 0,
+dragForce: 0
+};
+const els = {
+massStat: document.getElementById("massStat"),
+thrustStat: document.getElementById("thrustStat"),
+fuelStat: document.getElementById("fuelStat"),
+dragStat: document.getElementById("dragStat"),
+partsPalette: document.getElementById("partsPalette"),
+assemblyList: document.getElementById("assemblyList"),
+throttleStat: document.getElementById("throttleStat"),
+altStat: document.getElementById("altStat"),
+speedStat: document.getElementById("speedStat"),
+fuelFlight: document.getElementById("fuelFlight"),
+atmoDensityStat: document.getElementById("atmoDensityStat"),
+dragForceStat: document.getElementById("dragForceStat"),
+modeLabel: document.getElementById("modeLabel"),
+launchBtn: document.getElementById("launchBtn"),
+stageBtn: document.getElementById("stageBtn"),
+abortBtn: document.getElementById("abortBtn"),
+clearDesign: document.getElementById("clearDesign")
+};
+// --- THREE.JS SYSTEM RENDERING VIEWPORTS ---
+const canvas = document.getElementById("viewport");
+const renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true });
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x02040a);
+// Setup Perspective Tracking View System
+const camera = new THREE.PerspectiveCamera(60, 1, 0.1, 50000000);
+camera.position.set(0, 2, 12);
+const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
+scene.add(ambientLight);
+const sunLight = new THREE.DirectionalLight(0xffffff, 1.2);
+sunLight.position.set(500, 1000, 700);
+scene.add(sunLight);
+// Structural Group Hierarchies
+const hangarGroup = new THREE.Group();
+scene.add(hangarGroup);
+const flightWorldGroup = new THREE.Group();
+scene.add(flightWorldGroup);
+flightWorldGroup.visible = false;
+const rocketContainer = new THREE.Group();
+flightWorldGroup.add(rocketContainer);
+// --- EARTH AND SPACE VISUAL MAP IMPLEMENTATION ---
+// Core Earth Sphere Geometry
+const earthGeo = new THREE.SphereGeometry(PLANET.radius, 40, 40);
+const earthMat = new THREE.MeshStandardMaterial({
+color: 0x1d4ed8,
+roughness: 0.8,
+flatShading: true
+});
+const earthMesh = new THREE.Mesh(earthGeo, earthMat);
+flightWorldGroup.add(earthMesh);
+// Generate Low-Poly Continents Layout
+const terrainGeo = new THREE.SphereGeometry(PLANET.radius + 1500, 32, 32);
+const terrainMat = new THREE.MeshStandardMaterial({
+color: 0x16a34a,
+roughness: 0.9,
+flatShading: true
+});
+const terrainMesh = new THREE.Mesh(terrainGeo, terrainMat);
+// Distort vertices slightly to form clean continental island distributions
+const posAttr = terrainMesh.geometry.attributes.position;
+for (let i = 0; i < posAttr.count; i++) {
+let x = posAttr.getX(i);
+let y = posAttr.getY(i);
+let z = posAttr.getZ(i);
+let noise = Math.sin(x * 0.000005) * Math.cos(y * 0.000005) * 4000;
+if (noise < 0) noise = -2000; // Drop sections beneath ocean geometry values
+posAttr.setXYZ(i, x + norm(x)*noise, y + norm(y)*noise, z + norm(z)*noise);
+}
+terrainMesh.geometry.computeVertexNormals();
+flightWorldGroup.add(terrainMesh);
+function norm(val) { return val === 0 ? 0 : val / Math.abs(val); }
+// Realistic Layered Atmosphere Volume Scatter Simulator
+const atmoGeo = new THREE.SphereGeometry(PLANET.radius + PLANET.atmosphereHeight, 40, 40);
+const atmoMat = new THREE.MeshBasicMaterial({
+color: 0x38bdf8,
+transparent: true,
+opacity: 0.35,
+blending: THREE.NormalBlending,
+side: THREE.BackSide
+});
+const atmoMesh = new THREE.Mesh(atmoGeo, atmoMat);
+flightWorldGroup.add(atmoMesh);
+// Cosmic Background Stars Fields Array
+const starsGeo = new THREE.BufferGeometry();
+const starsCount = 1200;
+const starsPos = new Float32Array(starsCount * 3);
+for(let i=0; i<starsCount*3; i++) {
+starsPos[i] = (Math.random() - 0.5) * PLANET.radius * 6;
+}
+starsGeo.setAttribute('position', new THREE.BufferAttribute(starsPos, 3));
+const starsMat = new THREE.PointsMaterial({ color: 0xffffff, size: 2000, sizeAttenuation: true });
+const starPoints = new THREE.Points(starsGeo, starsMat);
+flightWorldGroup.add(starPoints);
+// --- INTERACTIVE APPARATUS BUILD TREE COMPONENT ---
 function populatePalette() {
 els.partsPalette.innerHTML = "";
 PARTS.forEach(part => {
@@ -543,33 +264,39 @@ function findPart(id) {
 return PARTS.find(p => p.id === id);
 }
 function initAssembly() {
-assembly = DEFAULT_ASSEMBLY.map(a => findPart(a.partId));
-rebuildVesselVisuals();
+assembly = DEFAULT_ASSEMBLY.map(a => findPart(a.id));
+rebuildHangarVisuals();
 updateAssemblyStats();
 }
 function addPart(id) {
 const part = findPart(id);
 if (part) {
 assembly.push(part);
-rebuildVesselVisuals();
+rebuildHangarVisuals();
 updateAssemblyStats();
 }
 }
 function removePart(index) {
 assembly.splice(index, 1);
-rebuildVesselVisuals();
+rebuildHangarVisuals();
 updateAssemblyStats();
 }
+els.clearDesign.onclick = () => {
+assembly = [];
+rebuildHangarVisuals();
+updateAssemblyStats();
+};
 function updateAssemblyStats() {
 let totalMass = 0;
 let totalThrust = 0;
 let totalFuel = 0;
+let totalCd = 0;
 els.assemblyList.innerHTML = "";
 assembly.forEach((part, index) => {
 totalMass += part.dry + part.fuel;
 totalThrust += part.thrust;
 totalFuel += part.fuel;
-// Update Hangar List View UI
+totalCd += part.cd;
 const item = document.createElement("div");
 item.className = "assemblyItem";
 item.innerHTML = <span>${part.name}</span>;
@@ -580,142 +307,262 @@ delBtn.onclick = () => removePart(index);
 item.appendChild(delBtn);
 els.assemblyList.appendChild(item);
 });
-els.massStat.textContent = ${totalMass} kg;
-els.thrustStat.textContent = ${totalThrust} N;
-els.fuelStat.textContent = ${totalFuel} kg;
-els.comStat.textContent = ${(assembly.length * 0.5).toFixed(1)} m;
-// Cache computed dry configurations for flight drop transfers
-flightState.totalMass = totalMass;
-flightState.vesselThrust = totalThrust;
-flightState.currentFuel = totalFuel;
+let avgCd = assembly.length > 0 ? (totalCd / assembly.length) : 0;
+els.massStat.textContent = ${totalMass.toLocaleString()} kg;
+els.thrustStat.textContent = ${totalThrust.toLocaleString()} N;
+els.fuelStat.textContent = ${totalFuel.toLocaleString()} kg;
+els.dragStat.textContent = avgCd.toFixed(2);
 }
-function rebuildVesselVisuals() {
-// Clear out old 3D models
-while(vesselGroup.children.length > 0) {
-vesselGroup.remove(vesselGroup.children[0]);
+// Draw Hangar Objects Geometric Configuration Styles
+function generatePartMesh(part) {
+let partGroup = new THREE.Group();
+const material = new THREE.MeshStandardMaterial({ color: part.color, roughness: 0.5, flatShading: true });
+let geo;
+switch(part.type) {
+case "parachute":
+geo = new THREE.CylinderGeometry(0.15, 0.35, 0.4, 8);
+break;
+case "cmd":
+geo = new THREE.ConeGeometry(0.5, 0.9, 8);
+break;
+case "tank":
+geo = new THREE.CylinderGeometry(0.5, 0.5, 1.4, 8);
+break;
+case "decoupler":
+geo = new THREE.CylinderGeometry(0.52, 0.52, 0.25, 8);
+break;
+case "engine":
+geo = new THREE.CylinderGeometry(0.35, 0.5, 0.5, 8);
+break;
+case "wing":
+geo = new THREE.BoxGeometry(2.2, 0.08, 0.5);
+break;
+case "control":
+geo = new THREE.BoxGeometry(0.08, 0.5, 0.4);
+break;
+case "wheel":
+geo = new THREE.CylinderGeometry(0.18, 0.18, 0.1, 6);
+break;
+default:
+geo = new THREE.BoxGeometry(0.4, 0.4, 0.4);
 }
+let mesh = new THREE.Mesh(geo, material);
+if(part.type === "wheel") {
+mesh.rotation.z = Math.PI / 2;
+}
+partGroup.add(mesh);
+return partGroup;
+}
+function rebuildHangarVisuals() {
+while(hangarGroup.children.length > 0) hangarGroup.remove(hangarGroup.children[0]);
 let currentY = 0;
 assembly.forEach((part) => {
-let geometry;
-if (part.type === "cmd") {
-geometry = new THREE.ConeGeometry(0.6, 1.2, 16);
-} else if (part.type === "engine") {
-geometry = new THREE.CylinderGeometry(0.4, 0.6, 0.8, 16);
+let m = generatePartMesh(part);
+m.position.y = currentY;
+currentY -= (part.type === "cmd" ? 0.9 : part.type === "tank" ? 1.4 : part.type === "decoupler" ? 0.25 : 0.5);
+hangarGroup.add(m);
+});
+hangarGroup.position.y = -currentY / 2;
+}
+// --- STAGING LOGIC PIPELINE ---
+// Dissects the build structural array sequence mapping decouple barriers cleanly
+function constructFlightStages() {
+stagesData = [];
+let currentStage = { parts: [], totalMass: 0, activeThrust: 0, activeFuel: 0, area: 0, cdSum: 0 };
+// Traverse bottom up to establish rocket firing arrays
+for (let i = assembly.length - 1; i >= 0; i--) {
+let part = assembly[i];
+if (part.type === "decoupler") {
+if (currentStage.parts.length > 0) {
+stagesData.push(currentStage);
+}
+// Initialize new decoupled parent payload track
+currentStage = { parts: [], totalMass: 0, activeThrust: 0, activeFuel: 0, area: 0, cdSum: 0 };
+currentStage.parts.push({...part});
+currentStage.totalMass += part.dry + part.fuel;
+currentStage.area += part.area;
+currentStage.cdSum += part.cd;
 } else {
-geometry = new THREE.CylinderGeometry(0.6, 0.6, 1.5, 16);
+currentStage.parts.push({...part});
+currentStage.totalMass += part.dry + part.fuel;
+currentStage.activeThrust += part.thrust;
+currentStage.activeFuel += part.fuel;
+currentStage.area += part.area;
+currentStage.cdSum += part.cd;
 }
-const material = new THREE.MeshStandardMaterial({ color: part.color, roughness: 0.5 });
-const mesh = new THREE.Mesh(geometry, material);
-// Stack parts down sequentially along the stack
-mesh.position.y = currentY;
-currentY -= (part.type === "cmd" ? 1.0 : part.type === "engine" ? 0.8 : 1.5);
-vesselGroup.add(mesh);
-});
-// Center camera alignment view on build boundaries
-vesselGroup.position.y = -currentY / 2;
 }
-// --- FLIGHT MATH AND SIMULATION CORNER ---
-function populatePlanets() {
-els.planetSelect.innerHTML = "";
-PLANETS.forEach(p => {
-const opt = document.createElement("option");
-opt.value = p.id;
-opt.textContent = p.name;
-els.planetSelect.appendChild(opt);
-});
-els.planetSelect.onchange = (e) => {
-currentPlanet = PLANETS.find(p => p.id === e.target.value);
-resetFlight();
-};
+if (currentStage.parts.length > 0) {
+stagesData.push(currentStage);
 }
-function resetFlight() {
-flightState.posX = 0;
-flightState.posY = currentPlanet.radius + 10;
-flightState.velX = 0;
-flightState.velY = 0;
-flightState.rotation = Math.PI / 2;
+currentStageIndex = 0;
+syncFlightStateToStage();
+}
+function syncFlightStateToStage() {
+if (currentStageIndex >= stagesData.length) {
+flightState.activeThrust = 0;
+flightState.activeFuel = 0;
+return;
+}
+// Accumulate total mass of remaining combined operational payloads overhead
+let structuralMassAccumulated = 0;
+let totalArea = 0;
+let totalCdSum = 0;
+let totalPartsCount = 0;
+for (let s = currentStageIndex; s < stagesData.length; s++) {
+structuralMassAccumulated += stagesData[s].totalMass;
+totalArea += stagesData[s].area;
+totalCdSum += stagesData[s].cdSum;
+totalPartsCount += stagesData[s].parts.length;
+}
+let activeRunningStage = stagesData[currentStageIndex];
+flightState.totalMass = structuralMassAccumulated;
+flightState.activeThrust = activeRunningStage.activeThrust;
+flightState.activeFuel = activeRunningStage.activeFuel;
+flightState.totalArea = totalArea;
+flightState.avgCd = totalPartsCount > 0 ? (totalCdSum / totalPartsCount) : 0.2;
+rebuildFlightRocketVisuals();
+}
+function fireStage() {
+if (mode !== "flight") return;
+// If the active stage still possesses structural elements but has engines off, arm them first
+if (throttle === 0 && flightState.activeFuel > 0) {
+throttle = 100;
+return;
+}
+// Otherwise, perform explosive decoupling separation transition step vectors
+if (currentStageIndex + 1 < stagesData.length) {
+currentStageIndex++;
+syncFlightStateToStage();
+} else {
+// Out of stages
+flightState.activeThrust = 0;
 throttle = 0;
+}
+}
+function rebuildFlightRocketVisuals() {
+while(rocketContainer.children.length > 0) rocketContainer.remove(rocketContainer.children[0]);
+let currentY = 0;
+// Walk back downwards from top payload down to current structural barrier separation layers
+let flightVisualParts = [];
+for (let s = stagesData.length - 1; s >= currentStageIndex; s--) {
+// Re-reverse stage layout sequence arrays for linear downward transformations
+for (let p = 0; p < stagesData[s].parts.length; p++) {
+flightVisualParts.push(stagesData[s].parts[p]);
+}
+}
+// Invert rendering sequence to match vertical orientation stacks
+flightVisualParts.reverse().forEach((part) => {
+let m = generatePartMesh(part);
+m.position.y = currentY;
+currentY -= (part.type === "cmd" ? 0.9 : part.type === "tank" ? 1.4 : part.type === "decoupler" ? 0.25 : 0.5);
+rocketContainer.add(m);
+});
+}
+// --- FLIGHT INITIALIZATION AND TRIGGER COMMAND RUNTIMES ---
+function switchTab(tabId) {
+document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
+document.querySelectorAll(".panel").forEach(p => p.classList.remove("active"));
+const activeTab = document.querySelector(.tab[data-tab="${tabId}"]);
+const activePanel = document.getElementById(tabId);
+if(activeTab) activeTab.classList.add('active');
+if(activePanel) activePanel.classList.add('active');
 }
 els.launchBtn.onclick = () => {
 if (assembly.length === 0) {
-alert("Build a stage assembly layout configuration vector before launching!");
+alert("Attach structural items in the assembly bay prior to launch mechanics execution sequences!");
 return;
 }
 mode = "flight";
 els.modeLabel.textContent = "In Flight";
 switchTab("flight");
-resetFlight();
+hangarGroup.visible = false;
+flightWorldGroup.visible = true;
+// Reset trajectory values completely inside double-precision layout scales
+flightState.posX = 0;
+flightState.posY = PLANET.radius + 5; // Resting index directly on terrain geometries
+flightState.velX = 0;
+flightState.velY = 0;
+flightState.rotation = Math.PI / 2;
+throttle = 0;
+constructFlightStages();
 };
 els.abortBtn.onclick = () => {
 mode = "hangar";
 els.modeLabel.textContent = "Hangar";
 switchTab("hangar");
-updateAssemblyStats();
-rebuildVesselVisuals();
-vesselGroup.rotation.set(0, 0, 0);
+hangarGroup.visible = true;
+flightWorldGroup.visible = false;
+rebuildHangarVisuals();
 };
 els.stageBtn.onclick = () => {
-if(throttle === 0) throttle = 100;
-else alert("Vessel engines armed and performing active burn configuration steps!");
+fireStage();
 };
-// Keyboard Hook bindings tailored safely for Chromebook performance layouts
+// Keyboard controls layout routines mapping Chromebook hardware inputs safely
 window.addEventListener("keydown", (e) => {
 if (mode !== "flight") return;
-if (e.key === "w" || e.key === "ArrowUp") throttle = Math.min(100, throttle + 10);
-if (e.key === "s" || e.key === "ArrowDown") throttle = Math.max(0, throttle - 10);
-if (e.key === "a" || e.key === "ArrowLeft") flightState.rotation += 0.1;
-if (e.key === "d" || e.key === "ArrowRight") flightState.rotation -= 0.1;
+if (e.key === "w" || e.key === "ArrowUp") throttle = Math.min(100, throttle + 5);
+if (e.key === "s" || e.key === "ArrowDown") throttle = Math.max(0, throttle - 5);
+if (e.key === "a" || e.key === "ArrowLeft") flightState.rotation += 0.05;
+if (e.key === "d" || e.key === "ArrowRight") flightState.rotation -= 0.05;
 if (e.key === " ") {
 e.preventDefault();
-throttle = throttle === 0 ? 100 : 0;
+fireStage();
 }
 });
-// Main Loop Running Step Functions
+// --- CORE SYSTEM RENDERING ENGINE TICKS LOOP ---
 let lastTime = performance.now();
 function animate() {
 requestAnimationFrame(animate);
 const now = performance.now();
 let dt = (now - lastTime) / 1000;
-if (dt > 0.1) dt = 0.1; // Protect against huge background window frame drops
+if (dt > 0.1) dt = 0.1; // Filter window tab focusing skips safely
 lastTime = now;
 if (mode === "hangar") {
-// Slow showcase spin routine in the assembly bay
-vesselGroup.rotation.y += 0.01;
-} else if (mode === "flight") {
-// 1. Calculations: Position Vector Normals
+hangarGroup.rotation.y += 0.01;
+// Keep camera locked locally inside VAB workspace loops
+camera.position.set(0, 0, 8);
+camera.lookAt(0, 0, 0);
+}
+else if (mode === "flight") {
+// 1. Vector Dynamics Position Calculations
 let r2 = flightState.posX * flightState.posX + flightState.posY * flightState.posY;
 let r = Math.sqrt(r2);
 let normX = flightState.posX / r;
 let normY = flightState.posY / r;
-let altitude = r - currentPlanet.radius;
-// 2. Gravitational forces calculation loop step updates
-let gAcc = currentPlanet.mu / r2;
+let altitude = r - PLANET.radius;
+// 2. Continuous Gravity Integrations Loop
+let gAcc = PLANET.mu / r2;
 let forceX = -gAcc * flightState.totalMass * normX;
 let forceY = -gAcc * flightState.totalMass * normY;
-// 3. Atmospheric Profile calculations
-if (currentPlanet.atmosphere > 0 && altitude < currentPlanet.atmosphere) {
-let rho = currentPlanet.rho0 * Math.exp(-altitude / currentPlanet.scaleHeight);
+// 3. Dynamic Atmospheric Density Scaling Profiles
+let rho = 0;
+flightState.dragForce = 0;
+if (altitude < PLANET.atmosphereHeight && altitude > 0) {
+rho = PLANET.rho0 * Math.exp(-altitude / PLANET.scaleHeight);
 let speed = Math.sqrt(flightState.velX * flightState.velX + flightState.velY * flightState.velY);
 if (speed > 0.1) {
-// Flattened combined generic drag area configuration coefficients profiles
-let dragMag = 0.5 * rho * speed * speed * 0.4 * 1.2;
+let dragMag = 0.5 * rho * speed * speed * flightState.avgCd * flightState.totalArea;
+flightState.dragForce = dragMag;
 forceX -= dragMag * (flightState.velX / speed);
 forceY -= dragMag * (flightState.velY / speed);
 }
 }
-// 4. Actively burning engine profiles updates step variables
-if (throttle > 0 && flightState.currentFuel > 0) {
-let thrustMag = flightState.vesselThrust * (throttle / 100);
+// 4. Liquid Fuel Depletion Metrics
+if (throttle > 0 && flightState.activeFuel > 0 && currentStageIndex < stagesData.length) {
+let thrustMag = flightState.activeThrust * (throttle / 100);
 let tX = Math.cos(flightState.rotation) * thrustMag;
 let tY = Math.sin(flightState.rotation) * thrustMag;
 forceX += tX;
 forceY += tY;
-// Consume fuel mass metrics
-let fuelBurned = (thrustMag / (320 * 9.81)) * dt;
-flightState.currentFuel = Math.max(0, flightState.currentFuel - fuelBurned);
-flightState.totalMass = Math.max(100, flightState.totalMass - fuelBurned);
-if (flightState.currentFuel <= 0) {
-flightState.vesselThrust = 0;
+let fuelBurned = (thrustMag / (300 * 9.81)) * dt;
+// Subtract from running fuel tracking allocations inside active sub-stages
+let currentRunningStage = stagesData[currentStageIndex];
+currentRunningStage.activeFuel = Math.max(0, currentRunningStage.activeFuel - fuelBurned);
+currentRunningStage.totalMass = Math.max(10, currentRunningStage.totalMass - fuelBurned);
+// Re-sync parameter drops instantly across memory allocation spaces
+flightState.activeFuel = currentRunningStage.activeFuel;
+flightState.totalMass = stagesData.reduce((s, val, idx) => s + (idx >= currentStageIndex ? val.totalMass : 0), 0);
+if (flightState.activeFuel <= 0) {
 throttle = 0;
 }
 }
@@ -726,26 +573,54 @@ flightState.velX += accX * dt;
 flightState.velY += accY * dt;
 flightState.posX += flightState.velX * dt;
 flightState.posY += flightState.velY * dt;
-// Ground Collision Crash Check Mechanics
+// Surface Ground Intersection Loops
 if (altitude <= 0) {
 let impactVelocity = Math.sqrt(flightState.velX * flightState.velX + flightState.velY * flightState.velY);
-if (impactVelocity > 12) {
-alert(Vessel crashed hard into the surface at ${impactVelocity.toFixed(1)} m/s! Bob had to bail out!);
-} else {
-alert("Safe landing confirmation achieved!");
+if (impactVelocity > 14) {
+alert(Kinetic impact failure! Structural assembly obliterated at ${impactVelocity.toFixed(1)} m/s.);
+} else if (Math.abs(impactVelocity) > 0.5) {
+alert("Touchdown confirmation achieved safely on the surface grid elements!");
 }
-resetFlight();
+// Snap coordinates safely to planetary boundaries to arrest gravity drift
+flightState.posX = 0;
+flightState.posY = PLANET.radius + 5;
+flightState.velX = 0;
+flightState.velY = 0;
+flightState.rotation = Math.PI / 2;
+throttle = 0;
 altitude = 0;
 }
-// 6. Push transformations smoothly over into Three space rendering views
-vesselGroup.rotation.z = flightState.rotation - Math.PI / 2;
-// Flight telemetry update outputs
+// 6. Coordinate Floating Origins Engine Shifts to prevent floating-point precision jitter
+// Position the rocket mesh container at a relative coordinate system offset local to camera structures
+rocketContainer.position.set(0, altitude, 0);
+rocketContainer.rotation.z = flightState.rotation - Math.PI / 2;
+// Rotate planet sphere maps directly beneath vehicle track footprints matching coordinates positions
+earthMesh.position.set(0, -PLANET.radius, 0);
+terrainMesh.position.set(0, -PLANET.radius, 0);
+atmoMesh.position.set(0, -PLANET.radius, 0);
+// Dynamically fade atmosphere visualization transparency to black when entering deep space vacuum thresholds
+if (altitude > PLANET.atmosphereHeight) {
+atmoMesh.visible = false;
+scene.background.setHex(0x000002);
+} else {
+atmoMesh.visible = true;
+let densityRatio = Math.max(0, 1 - (altitude / PLANET.atmosphereHeight));
+atmoMat.opacity = 0.4 * densityRatio;
+// Atmosphere blue color blends down linearly based on spatial depth parameters
+scene.background.lerpColors(new THREE.Color(0x02040a), new THREE.Color(0x07162c), densityRatio);
+}
+// Keep Flight Camera locked tightly relative to running active payload nodes configuration bounds
+camera.position.set(0, altitude + 3, 14);
+camera.lookAt(0, altitude, 0);
+// Push telemetry array updates directly into sidebar layouts
 els.throttleStat.textContent = ${throttle}%;
 els.altStat.textContent = ${Math.round(altitude).toLocaleString()} m;
-els.speedStat.textContent = ${Math.round(Math.sqrt(flightState.velX*flightState.velX + flightState.velY*flightState.velY))} m/s;
-els.fuelFlight.textContent = ${Math.round(flightState.currentFuel)} kg;
+els.speedStat.textContent = ${Math.round(Math.sqrt(flightState.velX * flightState.velX + flightState.velY * flightState.velY))} m/s;
+els.fuelFlight.textContent = ${Math.round(flightState.activeFuel).toLocaleString()} kg;
+els.atmoDensityStat.textContent = ${Math.round((rho / PLANET.rho0) * 100)}%;
+els.dragForceStat.textContent = ${Math.round(flightState.dragForce).toLocaleString()} N;
 }
-// Viewport resize calculations
+// Dynamic viewport boundary recalculations loop
 const width = canvas.clientWidth;
 const height = canvas.clientHeight;
 if (canvas.width !== width || canvas.height !== height) {
@@ -755,11 +630,9 @@ camera.updateProjectionMatrix();
 }
 renderer.render(scene, camera);
 }
-// Initial Runtime Boot Steps Loop
+// Runtime initial boot triggers
 populatePalette();
-populatePlanets();
 initAssembly();
+rebuildHangarVisuals();
 requestAnimationFrame(animate);
 })();
-
-
