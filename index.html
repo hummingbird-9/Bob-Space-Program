@@ -1,0 +1,875 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Bob Space Program</title>
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<style>
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; height: 100%; overflow: hidden;
+    background: #020813; color: #ebf3ff;
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  #app {
+    display: flex; width: 100vw; height: 100vh;
+  }
+  #sidebar {
+    width: 340px; background: rgba(6, 12, 22, 0.9);
+    border-right: 1px solid rgba(255,255,255,0.06);
+    padding: 12px 12px 18px 12px; overflow: auto;
+  }
+  #viewportWrap {
+    position: relative; flex: 1; background: black;
+  }
+  #viewport {
+    width: 100%; height: 100%; display: block;
+  }
+  .tabbar {
+    display: flex; gap: 6px; margin-bottom: 12px;
+  }
+  .tab {
+    flex: 1; text-align: center; padding: 8px;
+    background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 6px; cursor: pointer; user-select: none;
+  }
+  .tab.active {
+    background: #14314f; border-color: rgba(255,255,255,0.12);
+  }
+  .panel { display: none; }
+  .panel.active { display: block; }
+  .row { display: flex; justify-content: space-between; align-items: center; margin: 6px 0; }
+  .small { font-size: 12px; opacity: 0.8; }
+  .buttonRow { display: flex; gap: 8px; flex-wrap: wrap; }
+  button, select, input {
+    background: #122337; color: white; border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 6px; padding: 7px 8px; font-size: 13px;
+  }
+  #partsPalette {
+    display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px;
+  }
+  .partButton {
+    width: 92px; padding: 8px 4px; border-radius: 6px;
+    background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06);
+    cursor: pointer; text-align: center; font-size: 12px;
+  }
+  #assemblyList {
+    min-height: 120px; background: rgba(255,255,255,0.02);
+    border-radius: 8px; padding: 8px; border: 1px solid rgba(255,255,255,0.04);
+  }
+  .assemblyItem {
+    display:flex; justify-content:space-between; align-items:center;
+    padding: 6px 4px; border-bottom: 1px dashed rgba(255,255,255,0.05);
+  }
+  .assemblyItem:last-child { border-bottom: none; }
+  .hud {
+    position: absolute; left: 12px; top: 12px; z-index: 5;
+    background: rgba(7, 13, 18, 0.42); border: 1px solid rgba(255,255,255,0.04);
+    border-radius: 8px; padding: 8px 10px; font-size: 12px;
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="sidebar">
+    <div class="tabbar">
+      <div class="tab active" data-tab="hangar">VAB</div>
+      <div class="tab" data-tab="flight">Flight</div>
+      <div class="tab" data-tab="planner">Maneuvers</div>
+    </div>
+
+    <div id="hangar" class="panel active">
+      <div class="row"><strong>Vehicle Assembly</strong></div>
+      <div class="row"><span>Parts</span></div>
+      <div id="partsPalette"></div>
+
+      <div class="row" style="margin-top:12px"><span>Assembly</span></div>
+      <div id="assemblyList"></div>
+
+      <div class="buttonRow" style="margin-top:10px">
+        <button id="saveDesign">Save</button>
+        <button id="loadDesign">Load</button>
+        <button id="launchBtn">Launch</button>
+      </div>
+
+      <div style="margin-top:10px; line-height:1.8">
+        <div class="row"><span>Mass</span><span id="massStat">0 kg</span></div>
+        <div class="row"><span>Thrust</span><span id="thrustStat">0 N</span></div>
+        <div class="row"><span>Fuel</span><span id="fuelStat">0 kg</span></div>
+        <div class="row"><span>CoM</span><span id="comStat">0 m</span></div>
+      </div>
+    </div>
+
+    <div id="flight" class="panel">
+      <div class="row"><strong>Flight</strong></div>
+
+      <div class="row">
+        <span>Planet</span>
+        <select id="planetSelect"></select>
+      </div>
+
+      <div class="row"><span>Throttle</span><span id="throttleStat">0%</span></div>
+      <div class="row"><span>Altitude</span><span id="altStat">0 m</span></div>
+      <div class="row"><span>Speed</span><span id="speedStat">0 m/s</span></div>
+      <div class="row"><span>Fuel</span><span id="fuelFlight">0 kg</span></div>
+
+      <div class="buttonRow" style="margin-top:10px">
+        <button id="stageBtn">Stage</button>
+        <button id="abortBtn">Abort</button>
+      </div>
+
+      <div class="row" style="margin-top:8px">
+        <span>Quality</span>
+        <select id="qualitySelect">
+          <option value="high">High</option>
+          <option value="med">Medium</option>
+          <option value="low">Low</option>
+        </select>
+      </div>
+
+      <div class="small" style="margin-top:8px">
+        Controls: ↑ ↓ throttle, A/D pitch, W/S yaw, Q/E roll, Space stage, F follow
+      </div>
+    </div>
+
+    <div id="planner" class="panel">
+      <div class="row"><strong>Maneuver Planner</strong></div>
+      <div class="buttonRow">
+        <button id="createNodeBtn">Create Node</button>
+        <button id="execNodesBtn">Execute</button>
+      </div>
+      <div id="nodesList" style="margin-top:10px; min-height:80px;"></div>
+    </div>
+  </div>
+
+  <div id="viewportWrap">
+    <div class="hud">
+      <div>Vessel: <span id="vesselName">-</span></div>
+      <div>Mode: <span id="modeLabel">Hangar</span></div>
+    </div>
+    <canvas id="viewport"></canvas>
+  </div>
+</div>
+
+<script src="https://unpkg.com/three@0.158.0/build/three.min.js"></script>
+<script src="https://unpkg.com/three@0.158.0/examples/js/controls/OrbitControls.js"></script>
+<script>
+(() => {
+  const PARTS = [
+    { id: "cmd", name: "Command Pod", dry: 420, fuel: 0, thrust: 0, isp: 0, area: 1.0, cd: 0.3, type: "cmd" },
+    { id: "tank", name: "Fuel Tank", dry: 220, fuel: 800, thrust: 0, isp: 0, area: 1.2, cd: 0.45, type: "tank" },
+    { id: "engine", name: "Engine", dry: 260, fuel: 0, thrust: 220000, isp: 320, area: 0.7, cd: 0.5, type: "engine" },
+    { id: "wing", name: "Wing", dry: 170, fuel: 0, thrust: 0, isp: 0, area: 2.2, cd: 0.04, type: "wing" },
+    { id: "fin", name: "Tail Fin", dry: 70, fuel: 0, thrust: 0, isp: 0, area: 0.6, cd: 0.08, type: "control" }
+  ];
+  const DEFAULT_ASSEMBLY = [
+    { partId: "cmd", x: 0 },
+    { partId: "tank", x: -1.3 },
+    { partId: "engine", x: -2.8 }
+  ];
+
+  const PLANETS = [
+    { id: "earth", name: "Earth", mu: 3.986004418e14, radius: 6371000, atmosphere: 120000, rho0: 1.225, scaleHeight: 8500 },
+    { id: "moon", name: "Moon", mu: 4.9048695e12, radius: 1737400, atmosphere: 0, rho0: 0, scaleHeight: 1 }
+  ];
+
+  let assembly = [];
+  let quality = "high";
+  let currentPlanet = PLANETS[0];
+  let throttle = 0;
+  let pitch = 0, yaw = 0, roll = 0;
+  let followCamera = true;
+  let worker = null;
+  let mode = "hangar";
+  let nodes = [];
+  let vesselVisual = null;
+
+  const els = {
+    massStat: document.getElementById("massStat"),
+    thrustStat: document.getElementById("thrustStat"),
+    fuelStat: document.getElementById("fuelStat"),
+    comStat: document.getElementById("comStat"),
+    partsPalette: document.getElementById("partsPalette"),
+    assemblyList: document.getElementById("assemblyList"),
+    throttleStat: document.getElementById("throttleStat"),
+    altStat: document.getElementById("altStat"),
+    speedStat: document.getElementById("speedStat"),
+    fuelFlight: document.getElementById("fuelFlight"),
+    planetSelect: document.getElementById("planetSelect"),
+    vesselName: document.getElementById("vesselName"),
+    modeLabel: document.getElementById("modeLabel"),
+    nodesList: document.getElementById("nodesList")
+  };
+
+  function populatePalette() {
+    els.partsPalette.innerHTML = "";
+    PARTS.forEach(part => {
+      const btn = document.createElement("button");
+      btn.className = "partButton";
+      btn.textContent = part.name;
+      btn.onclick = () => addPart(part.id);
+      els.partsPalette.appendChild(btn);
+    });
+  }
+
+  function findPart(id) {
+    return PARTS.find(p => p.id === id);
+  }
+
+  function initAssembly() {
+    assembly = DEFAULT_ASSEMBLY.map(a => ({
+      part: findPart(a.partId), x: a.x
+    }));
+  }
+
+  function updateAssemblyStats() {
+    const totalMass = assembly.reduce((s, a) => s + (a.part.dry + (a.part.fuel || 0)), 0);
+    const totalThrust = assembly.reduce((s, a) => s + (a.part.thrust || 0), 0);
+    const fuel = assembly.reduce((s, a) => s + (a.part.fuel || 0), 0);
+    const com = assembly.reduce((s, a) => {
+      const m = a.part.dry + (a.part.fuel || 0);
+      return s + m * a.x;
+    }, 0) / Math.max(1, totalMass);
+
+    els.massStat.textContent = Math.round(totalMass) + " kg";
+    els.thrustStat.textContent = Math.round(totalThrust) + " N";
+    els.fuelStat.textContent = Math.round(fuel) + " kg";
+    els.comStat.textContent = com.toFixed(2) + " m";
+  }
+
+  function renderAssembly() {
+    els.assemblyList.innerHTML = "";
+    assembly.forEach((item, idx) => {
+      const row = document.createElement("div");
+      row.className = "assemblyItem";
+      row.innerHTML = `
+        <span>${idx}: ${item.part.name}</span>
+        <div style="display:flex; gap:6px; align-items:center;">
+          <input data-i="${idx}" type="number" step="0.1" value="${item.x}" style="width:72px;" />
+          <button data-i="${idx}">X</button>
+        </div>
+      `;
+      const btn = row.querySelector("button");
+      btn.onclick = () => { assembly.splice(idx, 1); renderAssembly(); };
+      const input = row.querySelector("input");
+      input.onchange = (e) => {
+        const val = parseFloat(e.target.value);
+        if (!Number.isNaN(val)) { assembly[idx].x = val; renderAssembly(); }
+      };
+      els.assemblyList.appendChild(row);
+    });
+    updateAssemblyStats();
+  }
+
+  function addPart(partId) {
+    const part = findPart(partId);
+    if (!part) return;
+    const lastX = assembly.length ? assembly[assembly.length - 1].x - 1.2 : 0;
+    assembly.push({ part, x: lastX });
+    renderAssembly();
+  }
+
+  function saveDesign() {
+    localStorage.setItem("spaceSimDesign", JSON.stringify(assembly.map(a => ({ id: a.part.id, x: a.x }))));
+    alert("Saved design");
+  }
+
+  function loadDesign() {
+    const saved = localStorage.getItem("spaceSimDesign");
+    if (!saved) { alert("No saved design"); return; }
+    try {
+      const dec = JSON.parse(saved);
+      assembly = dec.map(x => ({ part: findPart(x.id), x: x.x }));
+      renderAssembly();
+    } catch {
+      alert("Could not load design");
+    }
+  }
+
+  document.getElementById("saveDesign").onclick = saveDesign;
+  document.getElementById("loadDesign").onclick = loadDesign;
+
+  // 3D scene
+  const canvas = document.getElementById("viewport");
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.3));
+  renderer.setSize(window.innerWidth - 340, window.innerHeight);
+
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x020813);
+
+  const camera = new THREE.PerspectiveCamera(60, (window.innerWidth - 340) / window.innerHeight, 0.1, 1e8);
+  camera.position.set(0, 3000, 5000);
+
+  const controls = new THREE.OrbitControls(camera, renderer.domElement);
+  controls.enablePan = false;
+
+  const hemi = new THREE.HemisphereLight(0xffffff, 0x111b38, 0.9);
+  scene.add(hemi);
+
+  const dir = new THREE.DirectionalLight(0xffffff, 0.8);
+  dir.position.set(4000, 5000, 3000);
+  scene.add(dir);
+
+  let planetMesh = null;
+  let vesselVisual = null;
+  let vesselGlow = null;
+
+  function rebuildPlanetVisual() {
+    if (planetMesh) scene.remove(planetMesh);
+    const planet = currentPlanet;
+    const radius = planet.radius * 0.000025; // for visual scale
+    const seg = quality === "low" ? 20 : quality === "med" ? 36 : 64;
+    const geo = new THREE.SphereGeometry(radius, seg, seg);
+    const mat = new THREE.MeshStandardMaterial({ color: 0x2b6cb1, roughness: 1, metalness: 0 });
+    planetMesh = new THREE.Mesh(geo, mat);
+    scene.add(planetMesh);
+  }
+
+  function buildVesselVisual() {
+    if (vesselVisual) scene.remove(vesselVisual);
+    const g = new THREE.Group();
+    const body = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.45, 0.55, 3.5, 12),
+      new THREE.MeshStandardMaterial({ color: 0xef6c4a, roughness: 0.6, metalness: 0.1 })
+    );
+    body.rotation.z = Math.PI / 2;
+    g.add(body);
+
+    const nose = new THREE.Mesh(
+      new THREE.ConeGeometry(0.45, 1.2, 12),
+      new THREE.MeshStandardMaterial({ color: 0x6aa4ff, roughness: 0.5, metalness: 0.1 })
+    );
+    nose.position.set(2.0, 0, 0);
+    nose.rotation.z = -Math.PI / 2;
+    g.add(nose);
+
+    const flameGeo = new THREE.ConeGeometry(0.26, 1.4, 10);
+    const flameMat = new THREE.MeshBasicMaterial({ color: 0xffa843, transparent: true, opacity: 0.9 });
+    const flame = new THREE.Mesh(flameGeo, flameMat);
+    flame.position.set(-2.1, 0, 0);
+    flame.rotation.z = Math.PI / 2;
+    flame.visible = false;
+    g.add(flame);
+    vesselGlow = flame;
+
+    vesselVisual = g;
+    vesselVisual.scale.setScalar(0.8);
+    scene.add(vesselVisual);
+  }
+
+  function applyQuality() {
+    if (quality === "low") {
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 0.7));
+    } else if (quality === "med") {
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.1));
+    } else {
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.4));
+    }
+    rebuildPlanetVisual();
+  }
+
+  document.getElementById("qualitySelect").addEventListener("change", e => {
+    quality = e.target.value;
+    applyQuality();
+  });
+
+  // Worker physics
+  const workerCode = `
+    let state = null;
+    let planet = null;
+    let running = false;
+    let input = { throttle: 0, steering: { pitch: 0, yaw: 0, roll: 0 } };
+
+    function vec(x, y, z) { return {x:x||0, y:y||0, z:z||0}; }
+    function add(a, b) { return {x:a.x+b.x, y:a.y+b.y, z:a.z+b.z}; }
+    function sub(a, b) { return {x:a.x-b.x, y:a.y-b.y, z:a.z-b.z}; }
+    function mul(v, s) { return {x:v.x*s, y:v.y*s, z:v.z*s}; }
+    function dot(a, b) { return a.x*b.x + a.y*b.y + a.z*b.z; }
+    function len(v) { return Math.sqrt(v.x*v.x + v.y*v.y + v.z*v.z); }
+    function norm(v) { const L = len(v) || 1; return {x:v.x/L, y:v.y/L, z:v.z/L}; }
+    function cross(a, b) { return {x:a.y*b.z-a.z*b.y, y:a.z*b.x-a.x*b.z, z:a.x*b.y-a.y*b.x}; }
+    function rotate(v, axis, ang) {
+      const u = norm(axis);
+      const c = Math.cos(ang), s = Math.sin(ang);
+      const dotp = dot(v, u);
+      return {
+        x: v.x*c + (u.y*v.z - u.z*v.y)*s + u.x*dotp*(1-c),
+        y: v.y*c + (u.z*v.x - u.x*v.z)*s + u.y*dotp*(1-c),
+        z: v.z*c + (u.x*v.y - u.y*v.x)*s + u.z*dotp*(1-c)
+      };
+    }
+
+    function atmosphereDensity(alt) {
+      if (!planet.atmosphere || planet.atmosphere <= 0) return 0;
+      if (alt <= 0 || alt > planet.atmosphere) return 0;
+      return planet.rho0 * Math.exp(-alt / planet.scaleHeight);
+    }
+
+    function gravity(pos) {
+      const r = len(pos) || 1;
+      const mu = planet.mu;
+      const f = -mu / (r * r * r);
+      return mul(pos, f);
+    }
+
+    function getMassInfo(parts) {
+      let mass = 0;
+      let fuel = 0;
+      let dry = 0;
+      let cm = 0;
+      for (const p of parts) {
+        const m = (p.dry || 0) + (p.fuel || 0);
+        mass += m;
+        dry += p.dry || 0;
+        fuel += p.fuel || 0;
+        cm += m * (p.x || 0);
+      }
+      if (mass > 0) cm /= mass;
+      return { mass, dry, fuel, com: cm };
+    }
+
+    function localForward(state) {
+      return state.fwd || {x:1, y:0, z:0};
+    }
+
+    function aero(state) {
+      const vel = state.vel;
+      const speed = len(vel);
+      const alt = len(state.pos) - planet.radius;
+      const rho = atmosphereDensity(Math.max(0, alt));
+      const q = 0.5 * rho * speed * speed;
+
+      const fwd = localForward(state);
+      const vdir = speed > 0 ? norm(vel) : fwd;
+      const radial = norm(state.pos);
+      const lateral = norm(cross(vdir, radial));
+      const pf = norm({x:fwd.x - radial.x * dot(fwd, radial), y:fwd.y - radial.y * dot(fwd, radial), z:fwd.z - radial.z * dot(fwd, radial)});
+      const pv = norm({x:vdir.x - radial.x * dot(vdir, radial), y:vdir.y - radial.y * dot(vdir, radial), z:vdir.z - radial.z * dot(vdir, radial)});
+      let cosang = Math.max(-1, Math.min(1, dot(pf, pv)));
+      let aoa = Math.acos(cosang);
+      const cr = cross(pf, pv);
+      const side = dot(cr, lateral);
+      if (side < 0) aoa *= -1;
+
+      let wingArea = 0;
+      for (const p of state.parts) if (p.type === "wing") wingArea += p.area || 1.0;
+
+      const liftCoeff = 2.2 * aoa;
+      const dragCoeff = 0.02 + 0.5 * (liftCoeff * liftCoeff);
+
+      const dragDir = speed > 0 ? norm({ x: -vdir.x, y: -vdir.y, z: -vdir.z }) : {x:0, y:0, z:0};
+      const dragForce = mul(dragDir, q * (state.parts.reduce((s,p)=>s + (p.area || 0.4), 0)) * dragCoeff);
+
+      const liftDir = speed > 0 ? norm({x: radial.x * 0.2 + lateral.x, y: radial.y * 0.2 + lateral.y, z: radial.z * 0.2 + lateral.z}) : {x:0, y:1, z:0};
+      const liftForce = mul(liftDir, q * wingArea * liftCoeff);
+
+      return { drag: dragForce, lift: liftForce, rho, q, aoa, alt };
+    }
+
+    function step(dt) {
+      const m = getMassInfo(state.parts);
+      const mass = Math.max(1, m.mass);
+
+      const fwd = localForward(state);
+      const steer = input.steering || { pitch: 0, yaw: 0, roll: 0 };
+
+      const throttle = Math.max(0, Math.min(1, input.throttle || 0));
+      const maxThrust = state.parts.reduce((s, p) => s + (p.thrust || 0), 0);
+      const thrustMag = maxThrust * throttle;
+      let realFwd = { x: fwd.x, y: fwd.y, z: fwd.z };
+      if (Math.abs(steer.pitch) > 0) realFwd = rotate(realFwd, {x:0, y:1, z:0}, steer.pitch * 0.12);
+      if (Math.abs(steer.yaw) > 0) realFwd = rotate(realFwd, {x:0, y:0, z:1}, steer.yaw * 0.12);
+      if (Math.abs(steer.roll) > 0) realFwd = rotate(realFwd, {x:1, y:0, z:0}, steer.roll * 0.12);
+
+      const thrust = mul(realFwd, thrustMag);
+
+      const aero = aero(state);
+      const g = gravity(state.pos);
+
+      const accel = add(add(mul(thrust, 1 / mass), mul(aero.drag, 1 / mass)), g);
+      state.vel = add(state.vel, mul(accel, dt));
+      state.pos = add(state.pos, mul(state.vel, dt));
+
+      // fuel burn
+      const ispMean = state.parts.reduce((s, p) => s + ((p.isp || 0) * (p.thrust || 0)), 0) /
+        Math.max(1, state.parts.reduce((s, p) => s + (p.thrust || 0), 0));
+      const ve = Math.max(1, ispMean) * 9.80665;
+      const mdot = thrustMag / ve;
+      let fuelNeed = mdot * dt;
+      for (let i = state.parts.length - 1; i >= 0 && fuelNeed > 0; i--) {
+        const p = state.parts[i];
+        if ((p.fuel || 0) <= 0) continue;
+        const use = Math.min(p.fuel, fuelNeed);
+        p.fuel -= use;
+        fuelNeed -= use;
+      }
+
+      state.fwd = realFwd;
+      return {
+        pos: [state.pos.x, state.pos.y, state.pos.z],
+        vel: [state.vel.x, state.vel.y, state.vel.z],
+        fuel: state.parts.reduce((s, p) => s + (p.fuel || 0), 0),
+        alt: len(state.pos) - planet.radius,
+        aoa: aero.aoa
+      };
+    }
+
+    self.onmessage = (ev) => {
+      const m = ev.data;
+      if (m.type === "init") {
+        state = {
+          pos: {x:m.vessel.pos[0], y:m.vessel.pos[1], z:m.vessel.pos[2]},
+          vel: {x:m.vessel.vel[0], y:m.vessel.vel[1], z:m.vessel.vel[2]},
+          parts: m.vessel.parts.map(p => ({ ...p })),
+          fwd: {x:1, y:0, z:0}
+        };
+        planet = m.planet;
+        input = { throttle: 0, steering: { pitch: 0, yaw: 0, roll: 0 } };
+        running = true;
+        runLoop();
+      } else if (m.type === "input") {
+        if (typeof m.throttle === "number") input.throttle = m.throttle;
+        if (m.steering) input.steering = m.steering;
+      } else if (m.type === "stage") {
+        if (state && state.parts.length > 0) state.parts.pop();
+      } else if (m.type === "requestState") {
+        if (state) {
+          const out = {
+            pos: [state.pos.x, state.pos.y, state.pos.z],
+            vel: [state.vel.x, state.vel.y, state.vel.z],
+            fuel: state.parts.reduce((s, p) => s + (p.fuel || 0), 0)
+          };
+          self.postMessage({ type: "state", state: out });
+        }
+      } else if (m.type === "stop") {
+        running = false;
+      }
+    };
+
+    function runLoop() {
+      const dt = 0.05;
+      function tick() {
+        if (!running) return;
+        const out = step(dt);
+        self.postMessage({ type: "state", state: out });
+        setTimeout(tick, dt * 1000);
+      }
+      tick();
+    }
+  `;
+
+  function createWorker() {
+    if (worker) {
+      worker.terminate();
+      worker = null;
+    }
+    const blob = new Blob([workerCode], { type: "application/javascript" });
+    const url = URL.createObjectURL(blob);
+    worker = new Worker(url);
+    worker.onmessage = handleWorkerMessage;
+  }
+
+  function handleWorkerMessage(ev) {
+    const msg = ev.data;
+    if (msg.type === "state") {
+      const s = msg.state;
+      const pos = s.pos;
+      const vel = s.vel;
+
+      const altitude = Math.hypot(pos[0], pos[1], pos[2]) - currentPlanet.radius;
+      const speed = Math.hypot(vel[0], vel[1], vel[2]);
+
+      els.altStat.textContent = Math.round(altitude) + " m";
+      els.speedStat.textContent = Math.round(speed) + " m/s";
+      els.fuelFlight.textContent = Math.round(s.fuel) + " kg";
+
+      if (vesselVisual) {
+        const scale = 1 / 100000; // visual scale
+        vesselVisual.position.set(pos[0] * scale, pos[1] * scale, pos[2] * scale);
+        if (speed > 1) {
+          const v = new THREE.Vector3(vel[0], vel[1], vel[2]).normalize();
+          const q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(1, 0, 0), v);
+          vesselVisual.quaternion.slerp(q, 0.2);
+        }
+        if (vesselGlow) {
+          vesselGlow.visible = throttle > 0.05;
+          const sc = 0.8 + throttle * 2.2;
+          vesselGlow.scale.set(sc, sc, sc);
+        }
+      }
+
+      if (followCamera) {
+        const target = vesselVisual ? vesselVisual.position.clone() : new THREE.Vector3();
+        const camOffset = new THREE.Vector3(10, 4, 8);
+        camera.position.lerp(target.clone().add(camOffset), 0.08);
+        camera.lookAt(target);
+      }
+    }
+  }
+
+  function launch() {
+    const parts = assembly.map(a => ({
+      id: a.part.id,
+      dry: a.part.dry,
+      fuel: a.part.fuel || 0,
+      thrust: a.part.thrust || 0,
+      isp: a.part.isp || 0,
+      area: a.part.area || 0.5,
+      cd: a.part.cd || 0.2,
+      type: a.part.type,
+      x: a.x
+    }));
+
+    const alt = 120000;
+    const r = currentPlanet.radius + alt;
+    const pos = [r, 0, 0];
+    const vCirc = Math.sqrt(currentPlanet.mu / r);
+    const vel = [0, vCirc * 0.98, 0];
+
+    createWorker();
+    worker.postMessage({
+      type: "init",
+      vessel: { parts, pos, vel },
+      planet: currentPlanet,
+      settings: { dt: 0.05 }
+    });
+
+    mode = "flight";
+    els.modeLabel.textContent = "Flight";
+    throttle = 0.0;
+    updateThrottleDisplay();
+    renderTab();
+    setTimeout(() => {
+      try {
+        if (worker) worker.postMessage({ type: "input", throttle: 0 });
+      } catch {}
+    }, 50);
+  }
+
+  function stage() {
+    if (!worker) return;
+    worker.postMessage({ type: "stage", count: 1 });
+  }
+
+  function abort() {
+    if (worker) {
+      worker.postMessage({ type: "stop" });
+      worker.terminate();
+      worker = null;
+    }
+    mode = "hangar";
+    els.modeLabel.textContent = "Hangar";
+    renderTab();
+  }
+
+  function updateThrottleDisplay() {
+    els.throttleStat.textContent = Math.round(throttle * 100) + "%";
+  }
+
+  function sendThrottle(v) {
+    throttle = Math.max(0, Math.min(1, v));
+    updateThrottleDisplay();
+    if (worker) worker.postMessage({ type: "input", throttle });
+  }
+
+  function sendSteering() {
+    if (!worker) return;
+    worker.postMessage({
+      type: "input",
+      steering: { pitch, yaw, roll }
+    });
+  }
+
+  function renderTab() {
+    document.querySelectorAll(".tab").forEach(tab => {
+      const isActive = tab.dataset.tab === (mode === "flight" ? "flight" : mode === "planner" ? "planner" : "hangar");
+      tab.classList.toggle("active", isActive);
+    });
+    document.getElementById("hangar").classList.toggle("active", mode === "hangar");
+    document.getElementById("flight").classList.toggle("active", mode === "flight");
+    document.getElementById("planner").classList.toggle("active", mode === "planner");
+  }
+
+  function createNode() {
+    const direction = prompt("Direction: prograde/retrograde/normal/antinormal/radial/antiradial", "prograde");
+    if (!direction) return;
+    const dv = parseFloat(prompt("Delta-V (m/s)", "100"));
+    if (Number.isNaN(dv)) return;
+    nodes.push({ direction, dv });
+    renderNodes();
+  }
+
+  function renderNodes() {
+    els.nodesList.innerHTML = "";
+    if (nodes.length === 0) {
+      els.nodesList.innerHTML = "<div class='small'>No maneuver nodes</div>";
+      return;
+    }
+    nodes.forEach((n, i) => {
+      const row = document.createElement("div");
+      row.textContent = `${i}: ${n.direction} / ${n.dv} m/s`;
+      row.style.marginBottom = "6px";
+      els.nodesList.appendChild(row);
+    });
+  }
+
+  function execNodes() {
+    if (!worker || nodes.length === 0) {
+      alert("Launch first and create nodes");
+      return;
+    }
+    const node = nodes.shift();
+    renderNodes();
+
+    worker.postMessage({ type: "requestState" });
+    const once = (ev) => {
+      const msg = ev.data;
+      if (msg.type === "state") {
+        const s = msg.state;
+        const vel = new THREE.Vector3(s.vel[0], s.vel[1], s.vel[2]);
+        const speed = vel.length();
+        let dir = new THREE.Vector3(1, 0, 0);
+
+        if (node.direction === "prograde") dir = vel.clone().normalize();
+        if (node.direction === "retrograde") dir = vel.clone().normalize().multiplyScalar(-1);
+        if (node.direction === "normal") {
+          const radial = new THREE.Vector3(s.pos[0], s.pos[1], s.pos[2]).normalize();
+          dir = new THREE.Vector3(0, 0, 1).cross(radial).normalize();
+        }
+        if (node.direction === "antinormal") {
+          const radial = new THREE.Vector3(s.pos[0], s.pos[1], s.pos[2]).normalize();
+          dir = new THREE.Vector3(0, 0, 1).cross(radial).normalize().multiplyScalar(-1);
+        }
+        if (node.direction === "radial") {
+          const radial = new THREE.Vector3(s.pos[0], s.pos[1], s.pos[2]).normalize();
+          dir = radial.clone();
+        }
+        if (node.direction === "antiradial") {
+          const radial = new THREE.Vector3(s.pos[0], s.pos[1], s.pos[2]).normalize();
+          dir = radial.clone().multiplyScalar(-1);
+        }
+
+        const burnTime = Math.max(0.5, Math.abs(node.dv) / 150); // rough
+        sendThrottle(0.8);
+        const prev = worker.onmessage;
+        let t = 0;
+        const iv = setInterval(() => {
+          t += 0.05;
+          if (t >= burnTime) {
+            sendThrottle(0);
+            worker.onmessage = prev;
+            clearInterval(iv);
+            return;
+          }
+          // approximate steering to target vector
+          const steerDir = dir.clone().normalize();
+          const targetYaw = Math.atan2(steerDir.z, steerDir.x);
+          const targetPitch = Math.asin(steerDir.y);
+          yaw = targetYaw * 0.8;
+          pitch = targetPitch * 0.8;
+          sendSteering();
+        }, 50);
+
+        worker.onmessage = prev;
+      }
+    };
+    worker.onmessage = once;
+  }
+
+  // UI hooks
+  document.querySelectorAll(".tab").forEach(tab => {
+    tab.onclick = () => {
+      if (tab.dataset.tab === "flight") {
+        mode = "flight";
+      } else if (tab.dataset.tab === "planner") {
+        mode = "planner";
+      } else {
+        mode = "hangar";
+      }
+      renderTab();
+    };
+  });
+
+  document.getElementById("launchBtn").onclick = launch;
+  document.getElementById("stageBtn").onclick = stage;
+  document.getElementById("abortBtn").onclick = abort;
+  document.getElementById("createNodeBtn").onclick = createNode;
+  document.getElementById("execNodesBtn").onclick = execNodes;
+
+  // Planet selector
+  const select = document.getElementById("planetSelect");
+  PLANETS.forEach((planet, i) => {
+    const opt = document.createElement("option");
+    opt.value = i;
+    opt.textContent = planet.name;
+    select.appendChild(opt);
+  });
+  select.onchange = () => { currentPlanet = PLANETS[Number(select.value)]; rebuildPlanetVisual(); };
+
+  // Keyboard controls
+  window.addEventListener("keydown", e => {
+    if (mode !== "flight") return;
+
+    if (e.code === "ArrowUp") sendThrottle(throttle + 0.05);
+    if (e.code === "ArrowDown") sendThrottle(throttle - 0.05);
+    if (e.key === "a" || e.key === "A") pitch += 0.08;
+    if (e.key === "d" || e.key === "D") pitch -= 0.08;
+    if (e.key === "w" || e.key === "W") yaw += 0.08;
+    if (e.key === "s" || e.key === "S") yaw -= 0.08;
+    if (e.key === "q" || e.key === "Q") roll += 0.12;
+    if (e.key === "e" || e.key === "E") roll -= 0.12;
+    if (e.code === "Space") stage();
+    if (e.key === "f" || e.key === "F") followCamera = !followCamera;
+
+    setTimeout(() => {
+      pitch *= 0.75;
+      yaw *= 0.75;
+      roll *= 0.75;
+      sendSteering();
+    }, 50);
+  });
+
+  // window resize
+  function resize() {
+    renderer.setSize(window.innerWidth - 340, window.innerHeight);
+    camera.aspect = (window.innerWidth - 340) / window.innerHeight;
+    camera.updateProjectionMatrix();
+  }
+  window.addEventListener("resize", resize);
+
+  // initialize
+  populatePalette();
+  initAssembly();
+  renderAssembly();
+  currentPlanet = PLANETS[0];
+  select.value = "0";
+  rebuildPlanetVisual();
+  buildVesselVisual();
+  renderTab();
+
+  function animate() {
+    requestAnimationFrame(animate);
+
+    if (vesselVisual) {
+      if (followCamera && mode === "flight") {
+        const target = vesselVisual.position.clone();
+        const camOfs = new THREE.Vector3(8, 4, 8);
+        camera.position.lerp(target.clone().add(camOfs), 0.08);
+        camera.lookAt(target);
+      }
+      if (vesselGlow) {
+        vesselGlow.visible = throttle > 0.05;
+      }
+    }
+    renderer.render(scene, camera);
+  }
+
+  requestAnimationFrame(animate);
+
+  // named vessel
+  els.vesselName.textContent = "Prototype";
+})(); 
+</script>
+</body>
+</html>
