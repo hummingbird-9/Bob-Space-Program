@@ -136,6 +136,21 @@ input[type="color"] { width: 100%; min-height: 32px; padding: 2px; }
 .flight-stat-grid { display: grid; grid-template-columns: 1fr auto; gap: 5px; font: 10px monospace; }
 .button-row, .timewarp-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 8px; }
 .flight-controls button { border-color: #637c91; background: #263d51; color: #f5fbff; }
+#mainLayout.single-view { grid-template-columns: minmax(0, 1fr) !important; }
+.single-view .work-area { grid-column: 1; width: 100%; min-width: 0; }
+#flightShell { flex: 1 1 auto; min-height: 0; }
+#flightCanvas { background: #78a9d1; }
+.flight-controls { width: min(360px, 38vw); max-height: 48vh; overflow: auto; }
+.flight-controls .button-row { flex-wrap: wrap; }
+.flight-controls .stage-button { background: #b87524; border-color: #e4ad5a; color: white; font-weight: 800; }
+.work-toolbar:has(#flightTools:not([hidden])) { min-height: 48px; }
+.work-toolbar:has(#flightTools:not([hidden])) .facility-heading { flex-basis: 210px; }
+.drag-instructions { color: var(--app-muted); font-size: 9px; }
+@media (max-width: 640px) {
+  .flight-controls { width: min(300px, 52vw); padding: 7px; }
+  .flight-bottom-hud { inset-inline: 6px; }
+  .navball-frame canvas { width: 118px; height: 118px; }
+}
 .map-shell { display: flex; flex: 1; flex-direction: column; min-height: 0; background: #07101d; color: #eef6ff; }
 .map-header, .map-footer { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 11px; font: 10px monospace; }
 .map-footer { border-top: 1px solid rgba(255,255,255,.15); }
@@ -147,6 +162,11 @@ input[type="color"] { width: 100%; min-height: 32px; padding: 2px; }
 .modal-actions { display: flex; gap: 7px; margin-top: 10px; }
 .code-input { width: 100%; min-height: 190px; padding: 10px; border: 1px solid var(--app-border); border-radius: 8px; background: light-dark(#f5f8fa, #111c27); color: var(--app-text); font: 11px/1.45 ui-monospace, monospace; }
 .flag-modal { width: min(800px, 100%); }
+.fairing-modal { width: min(820px, 100%); }
+.fairing-profile-layout { display: grid; grid-template-columns: minmax(0,1fr) 150px; gap: 12px; align-items: start; margin: 10px 0; }
+#fairingProfileCanvas { display: block; width: 100%; height: auto; border: 1px solid var(--app-border); border-radius: 8px; background: #f2f6f8; cursor: crosshair; touch-action: manipulation; }
+.fairing-profile-actions { display: flex; flex-direction: column; gap: 6px; }
+.fairing-profile-actions small { color: var(--app-muted); font-size: 9px; line-height: 1.45; }
 .flag-editor-layout { display: grid; grid-template-columns: minmax(0,1.25fr) minmax(210px,.9fr); gap: 15px; align-items: start; }
 #flagCanvas { display: block; width: 100%; height: auto; border: 1px solid var(--app-border); border-radius: 9px; background: #dbe4e9; }
 .flag-controls { min-width: 0; }
@@ -231,6 +251,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
       <div class="toolbar-group">
         <button class="tool-button" id="flagBtn">FLAG EDITOR</button>
         <button class="tool-button" id="customPartBtn">CUSTOM PART</button>
+          <button class="tool-button" id="fairingBuilderBtn">FAIRING BUILDER</button>
         <button class="tool-button" id="shaderBtn">SHADER MODE: OFF</button>
         <button class="tool-button" id="multiBtn">MULTIPLAYER</button>
         <button class="tool-button" id="helpBtn">KEYS / HELP</button>
@@ -257,7 +278,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
             <button class="category-button" data-category="Custom">Custom</button>
           </div>
           <div id="partList" class="part-list" role="listbox" aria-label="Available parts"></div>
-          <div class="hint-box" id="partHint">Select a part, then click a stack node or a surface in the editor to attach it.</div>
+          <div class="hint-box" id="partHint">Start with a command pod. Click its center stack nodes to snap parts, or mount parts anywhere on a side surface.</div>
         </div>
       </aside>
 
@@ -273,23 +294,27 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
           <div class="flight-tools" id="flightTools" hidden>
             <button id="launchToMapBtn" class="tool-button">TRACKING MAP</button>
             <button id="returnEditorBtn" class="tool-button">RETURN TO EDITOR</button>
+            <button id="gearFlightBtn" class="tool-button">GEAR: DOWN</button>
+            <button id="panelsFlightBtn" class="tool-button">PANELS: RETRACTED</button>
             <button id="povBtn" class="tool-button">BOB POV COMPUTER</button>
           </div>
         </div>
 
         <div class="canvas-shell" id="editorShell">
           <canvas id="editorCanvas" aria-label="3D vehicle assembly editor"></canvas>
-          <div class="canvas-overlay top-left"><span class="overlay-pill">ADAPTIVE MODEL DETAIL</span><button class="overlay-pill" id="snapPill" type="button" title="Toggle attachment-node snapping">NODE SNAP: ON</button></div>
-          <div class="canvas-overlay bottom-right" id="editorReadout">CAMERA: ORBITAL • WHEEL: ZOOM • RIGHT-DRAG: ORBIT</div>
+          <div class="canvas-overlay top-left"><span class="overlay-pill">ADAPTIVE MODEL DETAIL</span><button class="overlay-pill" id="snapPill" type="button" title="Toggle center stack-node snapping">CENTER SNAP: ON</button></div>
+          <div class="canvas-overlay bottom-right" id="editorReadout">LEFT-DRAG: PAN XY • RIGHT-DRAG: ORBIT 3D • BLUE DOTS: FREE SURFACE MOUNTS • CENTER NODES: SNAP</div>
         </div>
 
         <div class="canvas-shell flight-shell" id="flightShell" hidden>
           <canvas id="flightCanvas" aria-label="Flight view"></canvas>
           <div class="flight-top-hud">
-            <img id="bobPilotImage" src="png/bob.png" alt="Bob pilot" width="24" height="24"><span id="flightMission">BSP-01 / KERBIN ASCENT</span>
+            <img id="bobPilotImage" src="data:image/png;base64,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" alt="Bob pilot" width="24" height="24"><span id="flightMission">BSP-01 / KERBIN ASCENT</span>
             <span id="flightAltitude">ALT 0 m</span>
             <span id="flightSpeed">SPD 0 m/s</span>
+            <span id="flightVSpeed">V/S +0 m/s</span>
             <span id="flightApo">AP 0 m</span>
+            <span id="flightAtmosphere">ATM 100%</span>
           </div>
           <div class="flight-bottom-hud">
             <div class="navball-frame">
@@ -303,7 +328,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
                 <span>TWR</span><b id="twrValue">0.00</b>
                 <span>FUEL</span><b id="fuelValue">0 kg</b>
               </div>
-              <input id="throttleRange" type="range" min="0" max="100" value="0" aria-label="Throttle">
+              <input id="throttleRange" type="range" min="0" max="100" value="100" aria-label="Throttle">
               <div class="button-row"><button id="stageBtn" class="stage-button">STAGE / SPACE</button><button id="sasBtn" class="tool-button active">SAS: ON</button><button id="rcsBtn" class="tool-button">RCS: OFF</button></div>
               <div class="timewarp-row"><span>TIME WARP</span><button id="warpDown">−</button><b id="warpValue">1×</b><button id="warpUp">+</button><button id="warpPause">PAUSE</button></div>
             </div>
@@ -325,11 +350,12 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
           <section class="inspector-section">
             <div class="section-label">SELECTED PART</div>
             <div class="selected-part-card">
-              <div class="selected-part-icon" id="selectedIcon">B</div>
-              <div><strong id="selectedName">B-1 Bob Command Pod</strong><small id="selectedCategory">COMMAND / 1 CREW</small></div>
+              <div class="selected-part-icon" id="selectedIcon">—</div>
+              <div><strong id="selectedName">No part selected</strong><small id="selectedCategory">EMPTY VESSEL</small></div>
             </div>
-            <p id="selectedDescription" class="muted-copy">One-seat re-entry capsule with basic control.</p>
+            <p id="selectedDescription" class="muted-copy">Choose a command pod to establish the root of your new craft.</p>
             <div class="part-properties" id="partProperties"></div>
+            <div id="deployControl" hidden style="margin-top:9px"><button id="toggleDeployBtn" class="tool-button full-width">TOGGLE DEPLOYABLE</button></div>
           </section>
 
           <section class="inspector-section" id="wingInspector" hidden>
@@ -366,6 +392,29 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
     </main>
 
     <footer class="app-statusbar"><span><i class="status-green"></i> SYSTEMS NOMINAL</span><span id="timeReadout">MISSION ELAPSED 00:00:00</span><span id="agencyReadout">BOB SPACE PROGRAM</span><span>LOCAL SAVE ENABLED</span></footer>
+  </div>
+
+  <div class="modal-backdrop" id="fairingModal" hidden>
+    <section class="modal window-panel fairing-modal">
+      <div class="modal-title"><b>PAYLOAD FAIRING BUILDER</b><button class="modal-close" data-close="fairingModal">×</button></div>
+      <p class="muted-copy">Build a custom fairing profile around your payload. Click the grid from the base upward to add radius/height points. The profile is revolved into a smooth shell; use the point buttons to undo or reset the shape.</p>
+      <div class="fairing-profile-layout">
+        <canvas id="fairingProfileCanvas" width="520" height="300" aria-label="Click to add fairing profile points"></canvas>
+        <div class="fairing-profile-actions"><button id="undoFairingPointBtn" class="tool-button">UNDO POINT</button><button id="resetFairingProfileBtn" class="tool-button">RESET PROFILE</button><small id="fairingPointCount">8 PROFILE POINTS</small><small>Click near the left for a narrow section and near the right for a wider section. Points are added from bottom to top.</small></div>
+      </div>
+      <textarea id="fairingProfileCode" class="code-input" spellcheck="false">{
+  "key": "customFairing",
+  "name": "Custom Payload Fairing",
+  "color": "#c9d2d6",
+  "mass": 260,
+  "width": 2.4,
+  "height": 3.5,
+  "depth": 2.4,
+  "profile": [[0.92,0.02],[1,0.08],[0.99,0.2],[0.94,0.42],[0.8,0.64],[0.58,0.82],[0.31,0.96],[0.04,1]]
+}</textarea>
+      <div class="modal-actions"><button id="createFairingBtn" class="tool-button">CREATE FAIRING & PLACE</button><button class="tool-button" data-close="fairingModal">CANCEL</button></div>
+      <div class="hint-box">The fairing becomes a selectable craft part. Use Offset and Rotate to position it, and save/export the craft to keep the profile.</div>
+    </section>
   </div>
 
   <div class="modal-backdrop" id="customModal" hidden>
@@ -430,7 +479,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
     <section class="modal window-panel help-modal">
       <div class="modal-title"><b>FLIGHT & EDITOR KEYBOARD REFERENCE</b><button class="modal-close" data-close="helpModal">×</button></div>
       <div class="keys-grid">
-        <div><h3>VAB / SPH</h3><p><kbd>1</kbd> Place <kbd>2</kbd> Offset <kbd>3</kbd> Rotate <kbd>4</kbd> Root</p><p><kbd>Delete</kbd> Remove part • <kbd>C</kbd> Snap toggle</p><p><kbd>Right-drag</kbd> Orbit camera • <kbd>Wheel</kbd> Zoom</p><p><kbd>Ctrl+Z</kbd> Undo • <kbd>Ctrl+Y</kbd> Redo</p></div>
+        <div><h3>VAB / SPH</h3><p><kbd>1</kbd> Place <kbd>2</kbd> Offset <kbd>3</kbd> Rotate <kbd>4</kbd> Root</p><p><kbd>Delete</kbd> Remove part • <kbd>C</kbd> Toggle center-node snap</p><p><kbd>Left-drag</kbd> Pan XY • <kbd>Right-drag</kbd> Orbit 3D • <kbd>Wheel</kbd> Zoom</p><p><kbd>Ctrl+Z</kbd> Undo • <kbd>Ctrl+Y</kbd> Redo</p><p>Start with a command pod. Center stack nodes snap; blue surface dots are free radial mount locations and do not snap.</p></div>
         <div><h3>FLIGHT</h3><p><kbd>W</kbd>/<kbd>S</kbd> Pitch • <kbd>A</kbd>/<kbd>D</kbd> Yaw • <kbd>Q</kbd>/<kbd>E</kbd> Roll</p><p><kbd>Shift</kbd>/<kbd>Ctrl</kbd> Throttle up/down</p><p><kbd>Z</kbd> Full throttle • <kbd>X</kbd> Cut throttle</p><p><kbd>Space</kbd> Stage • <kbd>T</kbd> SAS • <kbd>R</kbd> RCS</p><p><kbd>M</kbd> Map • <kbd>.</kbd>/<kbd>,</kbd> Timewarp</p><p><kbd>G</kbd> Gear • <kbd>B</kbd> Brakes • <kbd>U</kbd> Lights</p></div>
       </div>
       <p class="muted-copy">These are KSP-inspired defaults; keyboard handling is intentionally limited to the controls implemented in this prototype.</p>
@@ -506,14 +555,16 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
       { wingArea: 10.5, camber: 2, incidence: 0, sweep: 38, dihedral: 2, control: 0, description: 'Swept delta planform for fast atmospheric vehicles.', nodes: [{ p: [0, 0, 0], type: 'surface' }] }),
     part('elevon', 'Elevon Control Surface', 'Aero', 'wing', '#a8b6bc', 100, 2.1, 0.16, 0.85,
       { wingArea: 2.1, camber: 2, incidence: 0, sweep: 18, dihedral: 0, control: 18, description: 'Movable control surface for pitch and roll.', nodes: [{ p: [0, 0, 0], type: 'surface' }] }),
-    part('gear', 'Retractable Landing Gear', 'Aero', 'gear', '#7d888d', 140, 0.55, 1.3, 0.55,
-      { description: 'Landing gear for runway operations.', nodes: [{ p: [0, 0.65, 0], type: 'surface' }] }),
+    part('gear', 'Retractable Landing Gear', 'Aero', 'gear', '#7d888d', 140, 0.75, 1.8, 0.75,
+      { deployable: 'gear', defaultDeployed: true, description: 'Retractable landing gear with an articulated strut and wheel.', nodes: [{ p: [0, 0.9, 0], type: 'surface' }] }),
+    part('landingLeg', 'Adjustable Landing Strut', 'Aero', 'gear', '#8b969b', 210, 0.95, 2.2, 0.95,
+      { deployable: 'gear', defaultDeployed: true, description: 'Long deployable landing leg for landers and heavy test vehicles.', nodes: [{ p: [0, 1.1, 0], type: 'surface' }] }),
     part('parachute', 'Drogue / Main Chute', 'Recovery', 'parachute', '#c7b7a0', 120, 1.25, 0.6, 1.25,
       { description: 'Deployable recovery canopy.', nodes: [{ p: [0, -0.3, 0], type: 'bottom' }] }),
     part('battery', 'Z-400 Battery', 'Electrical', 'box', '#c4b879', 45, 0.45, 0.5, 0.45,
       { description: 'Electrical storage for probes and control systems.', nodes: [{ p: [0, 0.25, 0], type: 'top' }, { p: [0, -0.25, 0], type: 'bottom' }] }),
-    part('solar', 'Deployable Solar Array', 'Electrical', 'solar', '#527da7', 95, 1.8, 0.12, 2.2,
-      { description: 'Lightweight solar panel for long-duration missions.', nodes: [{ p: [0, 0, 0], type: 'surface' }] }),
+    part('solar', 'Deployable Solar Array', 'Electrical', 'solar', '#527da7', 95, 2.4, 0.12, 2.2,
+      { deployable: 'solar', defaultDeployed: false, description: 'Hinged solar array with folding wings and cell grid.', nodes: [{ p: [0, 0, 0], type: 'surface' }] }),
     part('wheel', 'Reaction Wheel', 'Control', 'box', '#a7adaf', 180, 0.9, 0.9, 0.9,
       { description: 'Attitude control without propellant.', nodes: [{ p: [0, 0.45, 0], type: 'top' }, { p: [0, -0.45, 0], type: 'bottom' }] }),
     part('rcs', 'RCS Translation Block', 'Control', 'rcs', '#aab7bb', 25, 0.55, 0.5, 0.55,
@@ -557,12 +608,19 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 
   function makeGeometry(def, detail = 8) {
     const w = def.width / 2, h = def.height / 2, d = def.depth / 2;
+    const clamp01 = value => Math.max(0, Math.min(1, Number(value) || 0));
     const triangles = [];
     const tri = (a, b, c) => triangles.push([a, b, c]);
     const quad = (a, b, c, e) => { tri(a, b, c); tri(a, c, e); };
     const box = (x, y, z) => {
       const a = [-x, -y, -z], b = [x, -y, -z], c = [x, y, -z], e = [-x, y, -z];
       const f = [-x, -y, z], g = [x, -y, z], h1 = [x, y, z], i = [-x, y, z];
+      quad(a, b, c, e); quad(f, i, h1, g); quad(a, f, g, b);
+      quad(b, g, h1, c); quad(c, h1, i, e); quad(e, i, f, a);
+    };
+    const boxAt = (cx, cy, cz, x, y, z) => {
+      const a = [cx - x, cy - y, cz - z], b = [cx + x, cy - y, cz - z], c = [cx + x, cy + y, cz - z], e = [cx - x, cy + y, cz - z];
+      const f = [cx - x, cy - y, cz + z], g = [cx + x, cy - y, cz + z], h1 = [cx + x, cy + y, cz + z], i = [cx - x, cy + y, cz + z];
       quad(a, b, c, e); quad(f, i, h1, g); quad(a, f, g, b);
       quad(b, g, h1, c); quad(c, h1, i, e); quad(e, i, f, a);
     };
@@ -617,7 +675,13 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
         break;
       }
       case 'cone': lathe([[0, -h], [w * 0.72, -h], [w * 0.9, -h * 0.96], [w, -h * 0.82], [w * 0.98, -h * 0.64], [w * 0.88, -h * 0.38], [w * 0.68, h * 0.02], [w * 0.42, h * 0.44], [w * 0.18, h * 0.82], [0.012, h]], detail); break;
-      case 'fairing': lathe([[0, -h], [w * 0.72, -h], [w * 0.9, -h * 0.96], [w, -h * 0.82], [w * 0.98, -h * 0.5], [w * 0.88, -h * 0.08], [w * 0.66, h * 0.35], [w * 0.38, h * 0.7], [w * 0.12, h * 0.94], [0.02, h]], detail); break;
+      case 'fairing': {
+        const profile = Array.isArray(def.profile) && def.profile.length >= 3
+          ? [[0, 0], ...def.profile.map(point => [clamp01(point[0]) * w, -h + clamp01(point[1]) * def.height]), [0.02, h]]
+          : [[0, -h], [w * 0.72, -h], [w * 0.9, -h * 0.96], [w, -h * 0.82], [w * 0.98, -h * 0.5], [w * 0.88, -h * 0.08], [w * 0.66, h * 0.35], [w * 0.38, h * 0.7], [w * 0.12, h * 0.94], [0.02, h]];
+        lathe(profile, detail);
+        break;
+      }
       case 'capsule': {
         const r = Math.min(w, d);
         lathe([[0, -h], [r * 0.48, -h * 0.99], [r * 0.78, -h * 0.94], [r * 0.94, -h * 0.82], [r, -h * 0.65], [r, h * 0.3], [r * 0.97, h * 0.52], [r * 0.86, h * 0.72], [r * 0.66, h * 0.88], [r * 0.34, h * 0.98], [0, h]], detail);
@@ -669,11 +733,41 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
       case 'parachute':
         lathe([[0, -h * 0.5], [w * 0.35, -h * 0.42], [w * 0.72, -h * 0.18], [w * 0.96, h * 0.12], [w, h * 0.28], [w * 0.92, h * 0.42], [w * 0.68, h * 0.57], [w * 0.32, h * 0.65], [0, h * 0.66]], detail);
         break;
-      case 'gear':
-        box(w * 0.32, h * 0.55, d * 0.3);
-        box(w * 0.12, h * 0.12, d * 0.9);
+      case 'gear': {
+        const deployed = def.deployed !== false;
+        if (deployed) {
+          boxAt(0, h * 0.18, 0, w * 0.34, h * 0.18, d * 0.3);
+          boxAt(0, -h * 0.12, 0, w * 0.12, h * 0.5, d * 0.12);
+          boxAt(0, -h * 0.42, 0, w * 0.34, h * 0.08, d * 0.34);
+          boxAt(0, -h * 0.47, 0, w * 0.44, h * 0.05, d * 0.12);
+        } else {
+          boxAt(0, h * 0.27, 0, w * 0.42, h * 0.1, d * 0.35);
+          boxAt(0, h * 0.12, 0, w * 0.12, h * 0.25, d * 0.12);
+          boxAt(0, -h * 0.05, 0, w * 0.32, h * 0.07, d * 0.25);
+        }
         break;
-      case 'solar': box(w, h, d); break;
+      }
+      case 'solar': {
+        const deployed = def.deployed === true;
+        const half = deployed ? w * 0.9 : w * 0.23;
+        const gap = deployed ? w * 0.06 : w * 0.025;
+        for (const side of [-1, 1]) {
+          const x0 = side < 0 ? -half : gap;
+          const x1 = side < 0 ? -gap : half;
+          const z0 = -d * 0.86, z1 = d * 0.86;
+          boxAt((x0 + x1) / 2, 0, 0, (x1 - x0) / 2, h * 0.65, d * 0.91);
+          const nx = 5, nz = 6;
+          for (let ix = 0; ix < nx; ix++) for (let iz = 0; iz < nz; iz++) {
+            const xa = x0 + (x1 - x0) * (ix + 0.08) / nx;
+            const xb = x0 + (x1 - x0) * (ix + 0.92) / nx;
+            const za = z0 + (z1 - z0) * (iz + 0.08) / nz;
+            const zb = z0 + (z1 - z0) * (iz + 0.92) / nz;
+            quad([xa, h * 0.7, za], [xb, h * 0.7, za], [xb, h * 0.7, zb], [xa, h * 0.7, zb]);
+          }
+        }
+        boxAt(0, 0, 0, w * 0.07, h * 1.1, d * 0.1);
+        break;
+      }
       case 'rcs': box(w, h, d); break;
       case 'shield': cylinder(w, def.height, detail, w * 0.65); break;
       case 'antenna':
@@ -941,8 +1035,9 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
       this.rootId = null;
       this.mode = 'place';
       this.template = null;
-      this.camera = { yaw: 0.78, pitch: 0.28, distance: 23, target: [0, 5, 0] };
+      this.camera = { yaw: 0.78, pitch: 0.28, distance: 23, target: [0, 2, 0] };
       this.drag = null;
+      this.pointerPosition = null;
       this.snap = true;
       this.showNodes = true;
       this.shaders = false;
@@ -958,7 +1053,6 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
       this.resizeObserver.observe(canvas);
       this.resize();
       this.bindEvents();
-      this.loadDefaultCraft();
       this.render();
     }
 
@@ -993,6 +1087,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 
     setTemplate(key, definition = null) {
       this.template = definition || P.byKey[key] || null;
+      this.pointerPosition = null;
       this.render();
     }
 
@@ -1001,27 +1096,14 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
       if (!def) return null;
       const item = {
         id: 'part-' + this.idCounter++, key, name: def.name, definition: definition ? P.clone(def) : null,
-        position: position.slice(), rotation: rotation.slice(), parentId,
+        position: position.slice(), rotation: rotation.slice(), parentId, deployed: def.defaultDeployed ?? true,
         stage: def.stage || 0, enabled: true
       };
       this.parts.push(item);
-      if (!this.rootId) this.rootId = item.id;
+      if (!this.rootId || def.category === 'Command') this.rootId = item.id;
       this.selectedId = item.id;
       this.changed();
       return item;
-    }
-
-    loadDefaultCraft() {
-      this.parts = [];
-      this.idCounter = 1;
-      const engine = this.addPart('engine3', [0, 1.3, 0]);
-      const separator = this.addPart('decoupler', [0, 2.81, 0], [0, 0, 0], engine.id);
-      const tank = this.addPart('tankM', [0, 5.62, 0], [0, 0, 0], separator.id);
-      const pod = this.addPart('pod1', [0, 9.42, 0], [0, 0, 0], tank.id);
-      this.rootId = pod.id;
-      this.selectedId = pod.id;
-      this.camera.target = [0, 5.3, 0];
-      this.changed();
     }
 
     getDefinition(item) {
@@ -1055,8 +1137,8 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
     geometryFor(item) {
       const def = this.getDefinition(item);
       if (!def) return [];
-      const cacheKey = [item.key, def.shape, def.width, def.height, def.depth, def.sweep || 0, def.dihedral || 0, def.camber || 0, def.control || 0].join(':');
-      if (!this.geometryCache.has(cacheKey)) this.geometryCache.set(cacheKey, P.makeGeometry(def, this.shaders ? this.highQualitySegments : this.baseQualitySegments));
+      const cacheKey = [item.key, def.shape, def.width, def.height, def.depth, def.sweep || 0, def.dihedral || 0, def.camber || 0, def.control || 0, item.deployed, JSON.stringify(def.profile || null)].join(':');
+      if (!this.geometryCache.has(cacheKey)) this.geometryCache.set(cacheKey, P.makeGeometry({ ...def, deployed: item.deployed }, this.shaders ? this.highQualitySegments : this.baseQualitySegments));
       return this.geometryCache.get(cacheKey);
     }
 
@@ -1113,7 +1195,11 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
         for (const tri of this.geometryFor(item)) {
           const world = tri.map(p => this.partWorldPoint(item, p));
           const hit = this.intersectTriangle(ray, world[0], world[1], world[2]);
-          if (hit && (!nearest || hit.t < nearest.t)) nearest = { ...hit, item };
+          if (hit && (!nearest || hit.t < nearest.t)) {
+            let normal = vec.norm(vec.cross(vec.sub(world[1], world[0]), vec.sub(world[2], world[0])));
+            if (vec.dot(normal, ray.direction) > 0) normal = vec.mul(normal, -1);
+            nearest = { ...hit, item, normal };
+          }
         }
       }
       return nearest;
@@ -1126,54 +1212,61 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
       return vec.add(ray.origin, vec.mul(ray.direction, t));
     }
 
+    previewPlacement(px, py) {
+      if (!this.template) return null;
+      const ray = this.rayFromScreen(px, py);
+      const hit = this.raycast(px, py);
+      const point = hit ? hit.point : this.intersectGround(ray);
+      if (!point) return null;
+      let position = point.slice();
+      let rotation = [0, 0, 0];
+      let parentId = hit ? hit.item.id : null;
+      let centerSnapped = false;
+      if (hit && this.snap) {
+        const parent = hit.item;
+        const parentDef = this.getDefinition(parent);
+        const parentNodes = parentDef.nodes || [];
+        const childNodes = this.template.nodes || [];
+        const normalOf = node => node.normal || (node.type === 'top' ? [0, 1, 0] : node.type === 'bottom' ? [0, -1, 0] : null);
+        let best = null;
+        for (const pn of parentNodes) for (const cn of childNodes) {
+          const stackPair = (pn.type === 'top' && cn.type === 'bottom') || (pn.type === 'bottom' && cn.type === 'top');
+        if (!stackPair) continue;
+          const parentNormal = normalOf(pn), childNormal = normalOf(cn);
+          if (parentNormal && childNormal && vec.dot(vec.norm(this.rotate(parentNormal, parent.rotation)), vec.norm(this.rotate(childNormal, parent.rotation))) > -0.75) continue;
+          const worldPoint = this.partWorldPoint(parent, pn.p);
+          const distance = vec.len(vec.sub(worldPoint, point));
+          if (!best || distance < best.distance) best = { pn, cn, worldPoint, distance, normal: parentNormal };
+        }
+        const snapThreshold = Math.max(0.28, Math.min(0.7, Math.min(parentDef.width, parentDef.depth) * 0.22));
+        if (best && best.distance <= snapThreshold) {
+          rotation = parent.rotation.slice();
+          const childAnchor = this.rotate(best.cn.p, rotation);
+          const outward = best.normal ? vec.norm(this.rotate(best.normal, parent.rotation)) : [0, 0, 0];
+          position = vec.sub(vec.sub(best.worldPoint, childAnchor), vec.mul(outward, 0.012));
+          centerSnapped = true;
+        }
+      }
+      if (hit && !centerSnapped) {
+        const normal = hit.normal || vec.mul(ray.direction, -1);
+        const localNormal = this.rotate(normal, [-rotation[0], -rotation[1], -rotation[2]]);
+        const support = Math.abs(localNormal[0]) * this.template.width / 2 + Math.abs(localNormal[1]) * this.template.height / 2 + Math.abs(localNormal[2]) * this.template.depth / 2;
+        position = vec.add(point, vec.mul(normal, support + 0.015));
+      }
+      if (!hit && this.parts.length === 0) position = [point[0], this.template.height / 2, point[2]];
+      return { position, rotation, parentId, hit };
+    }
+
     placeAt(px, py) {
       if (!this.template) {
         const hit = this.raycast(px, py);
         if (hit) { this.selectedId = hit.item.id; this.changed(); }
         return;
       }
-      const ray = this.rayFromScreen(px, py);
-      const hit = this.raycast(px, py);
-      const point = hit ? hit.point : this.intersectGround(ray);
-      if (!point) return;
-      let parentId = hit ? hit.item.id : null;
-      let position = point.slice();
-      let rotation = [0, 0, 0];
-      if (hit && this.snap) {
-        const parent = hit.item;
-        const parentDef = this.getDefinition(parent);
-        const childDef = this.template;
-        const parentNodes = parentDef.nodes || [];
-        const childNodes = childDef.nodes || [];
-        const normalOf = node => node.normal || (node.type === 'top' ? [0, 1, 0] : node.type === 'bottom' ? [0, -1, 0] : null);
-        const parentCandidates = parentNodes.map(node => ({ ...node, wp: this.partWorldPoint(parent, node.p) }));
-        let bestPair = null;
-        for (const parentNode of parentCandidates) {
-          for (const childNode of childNodes) {
-            const pn = normalOf(parentNode), cn = normalOf(childNode);
-            const stackPair = (parentNode.type === 'top' && childNode.type === 'bottom') || (parentNode.type === 'bottom' && childNode.type === 'top');
-            const surfacePair = parentNode.type === 'surface' && childNode.type === 'surface';
-            if (!stackPair && !surfacePair) continue;
-            if (pn && cn) {
-              const parentWorldNormal = vec.norm(this.rotate(pn, parent.rotation));
-              const childWorldNormal = vec.norm(this.rotate(cn, parent.rotation));
-              if (vec.dot(parentWorldNormal, childWorldNormal) > -0.75) continue;
-            }
-            const distance = vec.len(vec.sub(parentNode.wp, point));
-            if (!bestPair || distance < bestPair.distance) bestPair = { parentNode, childNode, distance, normal: pn };
-          }
-        }
-        if (bestPair) {
-          rotation = parent.rotation.slice();
-          const childAnchor = this.rotate(bestPair.childNode.p, rotation);
-          const outward = bestPair.normal ? vec.norm(this.rotate(bestPair.normal, parent.rotation)) : [0, 0, 0];
-          // A tiny controlled overlap hides raster cracks while the node centers
-          // remain aligned; this is small enough not to change visible dimensions.
-          position = vec.sub(vec.sub(bestPair.parentNode.wp, childAnchor), vec.mul(outward, 0.012));
-        }
-      }
+      const placement = this.previewPlacement(px, py);
+      if (!placement) return;
       const customDefinition = P.byKey[this.template.key] ? null : this.template;
-      const created = this.addPart(this.template.key, position, rotation, parentId, customDefinition);
+      const created = this.addPart(this.template.key, placement.position, placement.rotation, placement.parentId, customDefinition);
       if (created && this.mode === 'place') this.template = null;
     }
 
@@ -1204,8 +1297,32 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
         this.canvas.setPointerCapture(e.pointerId);
         return;
       }
-      if (this.mode === 'place') { this.placeAt(px, py); return; }
+      if (this.mode === 'place' && this.template) {
+        this.pointerPosition = [px, py];
+        this.drag = { kind: 'place', x: px, y: py, lastX: px, lastY: py };
+        this.canvas.setPointerCapture(e.pointerId);
+        this.render();
+        return;
+      }
+      if (this.mode === 'place') {
+        const placeHit = this.raycast(px, py);
+        if (placeHit) {
+          this.selectedId = placeHit.item.id;
+          this.drag = { kind: 'pan2d', x: px, y: py, target: this.camera.target.slice() };
+          this.canvas.setPointerCapture(e.pointerId);
+          this.changed();
+          return;
+        }
+        this.drag = { kind: 'pan2d', x: px, y: py, target: this.camera.target.slice() };
+        this.canvas.setPointerCapture(e.pointerId);
+        return;
+      }
       const hit = this.raycast(px, py);
+      if (!hit) {
+        this.drag = { kind: 'pan2d', x: px, y: py, target: this.camera.target.slice() };
+        this.canvas.setPointerCapture(e.pointerId);
+        return;
+      }
       if (this.mode === 'root') {
         if (hit) { this.rootId = hit.item.id; this.selectedId = hit.item.id; this.changed(); }
         return;
@@ -1228,11 +1345,23 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
     }
 
     pointerMove(e) {
-      if (!this.drag) return;
       const rect = this.canvas.getBoundingClientRect();
       const dpr = this.width / rect.width;
       const px = (e.clientX - rect.left) * dpr, py = (e.clientY - rect.top) * dpr;
+      if (this.template) this.pointerPosition = [px, py];
+      if (!this.drag) { if (this.template) this.render(); return; }
       const dx = px - this.drag.x, dy = py - this.drag.y;
+      if (this.drag.kind === 'place') {
+        this.drag.lastX = px; this.drag.lastY = py;
+        this.render();
+        return;
+      }
+      if (this.drag.kind === 'pan2d') {
+        const worldPerPixel = this.camera.distance / Math.min(this.width, this.height) * 1.8;
+        this.camera.target = [this.drag.target[0] - dx * worldPerPixel, this.drag.target[1] + dy * worldPerPixel, this.drag.target[2]];
+        this.render();
+        return;
+      }
       if (this.drag.kind === 'camera') {
         this.camera.yaw = this.drag.yaw - dx * 0.006;
         this.camera.pitch = clamp(this.drag.pitch + dy * 0.006, -1.25, 1.25);
@@ -1267,6 +1396,10 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
     }
 
     pointerUp() {
+      if (this.drag && this.drag.kind === 'place') {
+        this.placeAt(this.drag.lastX, this.drag.lastY);
+        this.pointerPosition = null;
+      }
       if (this.drag && this.drag.kind !== 'camera') this.changed();
       this.drag = null;
     }
@@ -1331,7 +1464,12 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
     load(serialized) {
       const data = typeof serialized === 'string' ? JSON.parse(serialized) : serialized;
       if (!data || !Array.isArray(data.parts) || data.parts.length > 300) throw new Error('Invalid craft file.');
-      this.parts = data.parts.map(p => ({ ...p, position: p.position.map(Number), rotation: p.rotation.map(Number) }));
+      this.parts = data.parts.map(p => {
+        const item = { ...p, position: p.position.map(Number), rotation: p.rotation.map(Number) };
+        const def = item.definition || P.byKey[item.key];
+        if (item.deployed == null) item.deployed = def?.defaultDeployed ?? true;
+        return item;
+      });
       this.rootId = data.rootId || (this.parts[0] && this.parts[0].id);
       this.idCounter = Math.max(Number(data.idCounter) || 1, this.parts.length + 1);
       this.selectedId = this.rootId;
@@ -1408,11 +1546,16 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
       ctx.fillStyle = sky; ctx.fillRect(0, 0, this.width, this.height);
       this.drawGrid();
 
-      const faces = [];
+      const faces = [], attachmentMarkers = [];
+      const cameraEye = this.cameraBasis().eye;
       for (const item of this.parts) {
         const def = this.getDefinition(item);
         if (!def) continue;
-        for (const tri of this.geometryFor(item)) {
+        const geometry = this.geometryFor(item);
+        const markerStride = Math.max(1, Math.ceil(geometry.length / 30));
+        let markerCount = 0;
+        for (let triIndex = 0; triIndex < geometry.length; triIndex++) {
+          const tri = geometry[triIndex];
           const world = tri.map(p => this.partWorldPoint(item, p));
           const projected = world.map(p => this.project(p));
           if (projected.some(p => !p)) continue;
@@ -1420,6 +1563,13 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
           const normal = vec.norm(vec.cross(vec.sub(world[1], world[0]), vec.sub(world[2], world[0])));
           const light = Math.max(0.18, 0.45 + vec.dot(normal, vec.norm([0.45, 0.85, 0.55])) * 0.55);
           faces.push({ projected, depth, color: def.color || '#aeb8bd', light, selected: item.id === this.selectedId });
+          if (triIndex % markerStride === 0 && markerCount < 30) {
+            const center = vec.mul(vec.add(vec.add(world[0], world[1]), world[2]), 1 / 3);
+            if (vec.dot(normal, vec.sub(cameraEye, center)) > 0) {
+              const screen = this.project(center);
+              if (screen) { attachmentMarkers.push(screen); markerCount++; }
+            }
+          }
         }
       }
       faces.sort((a, b) => b.depth - a.depth);
@@ -1434,6 +1584,31 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
         ctx.lineTo(face.projected[1].x, face.projected[1].y); ctx.lineTo(face.projected[2].x, face.projected[2].y);
         ctx.closePath(); ctx.fill();
         if (face.selected) ctx.stroke();
+      }
+
+      for (const marker of attachmentMarkers) {
+        ctx.fillStyle = 'rgba(219,248,255,.96)'; ctx.strokeStyle = 'rgba(8,117,158,.9)'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.arc(marker.x, marker.y, 2.6, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      }
+
+      if (this.template && this.pointerPosition) {
+        const placement = this.previewPlacement(this.pointerPosition[0], this.pointerPosition[1]);
+        if (placement) {
+          const ghostItem = { position: placement.position, rotation: placement.rotation };
+          const ghostGeometry = P.makeGeometry({ ...this.template, deployed: this.template.defaultDeployed ?? true }, this.baseQualitySegments);
+          ctx.save();
+          for (const tri of ghostGeometry) {
+            const projected = tri.map(p => this.project(this.partWorldPoint(ghostItem, p)));
+            if (projected.some(p => !p)) continue;
+            ctx.beginPath(); ctx.moveTo(projected[0].x, projected[0].y);
+            ctx.lineTo(projected[1].x, projected[1].y); ctx.lineTo(projected[2].x, projected[2].y); ctx.closePath();
+            ctx.fillStyle = 'rgba(21,157,204,.3)'; ctx.strokeStyle = 'rgba(10,115,155,.55)'; ctx.lineWidth = 0.7;
+            ctx.fill(); ctx.stroke();
+          }
+          const anchor = this.project(placement.position);
+          if (anchor) { ctx.strokeStyle = '#159dcc'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(anchor.x, anchor.y, 8, 0, Math.PI * 2); ctx.stroke(); }
+          ctx.restore();
+        }
       }
 
       const selected = this.selectedPart();
@@ -1493,6 +1668,8 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   let multiplayer = { active: false, mode: 'same', playerId: 'pilot-' + Math.random().toString(36).slice(2, 8), room: '', timer: null, server: '' };
   let flagData = { name: 'Bob Space Program', color1: '#184d78', color2: '#f0e6c8', color3: '#d7a940', pattern: 'horizontal', emblem: 'B', emblemText: 'BSP', emblemScale: 150, imageData: null };
   let flagImage = null;
+  const defaultFairingProfile = [[0.92,0.02],[1,0.08],[0.99,0.2],[0.94,0.42],[0.8,0.64],[0.58,0.82],[0.31,0.96],[0.04,1]];
+  let fairingProfilePoints = defaultFairingProfile.map(point => point.slice());
   let stars = [];
 
   function log(message) {
@@ -1627,6 +1804,12 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
         if (out) out.textContent = (def[key] ?? 0) + (key === 'wingArea' ? ' m²' : '°');
       }
     }
+    const deployControl = $('deployControl');
+    deployControl.hidden = !def || !def.deployable;
+    if (def && def.deployable) {
+      const deployed = item.deployed !== false;
+      $('toggleDeployBtn').textContent = (deployed ? 'RETRACT ' : 'DEPLOY ') + def.deployable.toUpperCase();
+    }
     const s = craftStats();
     $('dryMass').textContent = Math.round(s.dry).toLocaleString() + ' kg';
     $('propellant').textContent = Math.round(s.fuel).toLocaleString() + ' kg';
@@ -1662,6 +1845,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   function setView(view) {
     if (view === 'map' && currentView !== 'map') flightViewBeforeMap = currentView;
     currentView = view;
+    $('mainLayout').classList.toggle('single-view', view === 'flight' || view === 'map');
     $('editorShell').hidden = !(view === 'vab' || view === 'sph');
     $('flightShell').hidden = view !== 'flight';
     $('mapShell').hidden = view !== 'map';
@@ -1684,16 +1868,20 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   }
 
   function updateStatusButtons() {
-    $('snapPill').textContent = 'NODE SNAP: ' + (editor.snap ? 'ON' : 'OFF');
+    $('snapPill').textContent = 'CENTER SNAP: ' + (editor.snap ? 'ON' : 'OFF');
     $('shaderBtn').textContent = 'SHADER MODE: ' + (editor.shaders ? 'ON' : 'OFF');
     $('shaderBtn').classList.toggle('active', editor.shaders);
   }
 
   function launch() {
     if (!editor.parts.length) { log('ADD PARTS BEFORE LAUNCH'); return; }
+    const rootPart = editor.parts.find(item => item.id === editor.rootId);
+    const rootDefinition = rootPart && editor.getDefinition(rootPart);
+    if (!rootDefinition || rootDefinition.category !== 'Command') { log('PLACE A COMMAND POD AS THE CRAFT ROOT BEFORE LAUNCH'); return; }
     const stats = craftStats();
     if (!stats.thrust) { log('NO ENGINE INSTALLED — ADD AN ENGINE'); return; }
     vessel = V.makeVessel(editor.parts, P.byKey);
+    vessel.parts = editor.parts.map(item => ({ ...item, position: item.position.slice(), rotation: item.rotation.slice(), definition: item.definition ? P.clone(item.definition) : null }));
     vessel.landed = true;
     vessel.throttle = Number($('throttleRange').value) / 100;
     vessel.stage = 0;
@@ -1702,9 +1890,39 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
     warpIndex = 0; paused = false;
     $('warpValue').textContent = '1×';
     $('stageBtn').textContent = 'STAGE / SPACE';
+    $('gearFlightBtn').textContent = 'GEAR: DOWN';
+    $('panelsFlightBtn').textContent = 'PANELS: RETRACTED';
     setView('flight');
     log('VESSEL READY — PRESS SPACE OR STAGE TO IGNITE');
     updateFlightHud();
+  }
+
+  function toggleFlightDeployable(type) {
+    if (!vessel || !vessel.parts) return;
+    const matching = vessel.parts.filter(item => (item.definition || P.byKey[item.key])?.deployable === type);
+    if (!matching.length) { log('NO ' + type.toUpperCase() + ' PARTS INSTALLED'); return; }
+    const next = !matching.every(item => item.deployed === true);
+    for (const item of matching) {
+      item.deployed = next;
+      const editorPart = editor.parts.find(part => part.id === item.id);
+      if (editorPart) editorPart.deployed = next;
+    }
+    if (type === 'gear') vessel.gear = next;
+    editor.geometryCache.clear();
+    updateFlightHud();
+    drawFlightView();
+    log(type.toUpperCase() + (next ? ' DEPLOYED' : ' RETRACTED'));
+  }
+
+  function toggleSelectedDeployable() {
+    const item = editor.selectedPart();
+    const def = item && editor.getDefinition(item);
+    if (!def || !def.deployable) return;
+    item.deployed = item.deployed === false;
+    editor.geometryCache.clear();
+    renderInspector();
+    editor.render();
+    pushUndo();
   }
 
   function handleStage() {
@@ -1736,7 +1954,10 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
     const twr = mass ? thrust * 1000 / (mass * currentGravity(vessel)) : 0;
     $('flightAltitude').textContent = 'ALT ' + V.formatDistance(alt);
     $('flightSpeed').textContent = 'SPD ' + speed.toFixed(1) + ' m/s';
+    $('flightVSpeed').textContent = 'V/S ' + (V.dot(vessel.velocity, V.norm(vessel.position)) >= 0 ? '+' : '') + V.dot(vessel.velocity, V.norm(vessel.position)).toFixed(1) + ' m/s';
     $('flightApo').textContent = 'AP ' + (Number.isFinite(vessel.apoapsis) ? V.formatDistance(vessel.apoapsis) : 'ESCAPE');
+    const atmosphere = V.bodies[vessel.body].atmosphere;
+    $('flightAtmosphere').textContent = atmosphere ? 'ATM ' + Math.round(clamp(1 - alt / atmosphere.height, 0, 1) * 100) + '%' : 'NO ATM';
     $('throttleValue').textContent = Math.round(vessel.throttle * 100) + '%';
     $('thrustValue').textContent = Math.round(thrust).toLocaleString() + ' kN';
     $('twrValue').textContent = twr.toFixed(2);
@@ -1746,6 +1967,13 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
     $('sasBtn').classList.toggle('active', vessel.sas);
     $('rcsBtn').textContent = 'RCS: ' + (vessel.rcs ? 'ON' : 'OFF');
     $('rcsBtn').classList.toggle('active', vessel.rcs);
+    const parts = vessel.parts || [];
+    const gearParts = parts.filter(item => (item.definition || P.byKey[item.key])?.deployable === 'gear');
+    const panelParts = parts.filter(item => (item.definition || P.byKey[item.key])?.deployable === 'solar');
+    $('gearFlightBtn').textContent = 'GEAR: ' + (gearParts.length && gearParts.every(item => item.deployed) ? 'DOWN' : 'UP');
+    $('panelsFlightBtn').textContent = 'PANELS: ' + (panelParts.length && panelParts.every(item => item.deployed) ? 'DEPLOYED' : 'RETRACTED');
+    $('gearFlightBtn').classList.toggle('active', gearParts.length && gearParts.every(item => item.deployed));
+    $('panelsFlightBtn').classList.toggle('active', panelParts.length && panelParts.every(item => item.deployed));
     $('flightMission').textContent = vessel.missionName + ' / ' + vessel.body.toUpperCase() + ' ASCENT';
     $('timeReadout').textContent = 'MISSION ELAPSED ' + formatClock(vessel.flightTime);
     drawNavball();
@@ -1771,38 +1999,383 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
     return { w, h, dpr };
   }
 
+  function drawFlightViewOld() {
+    if (!vessel || $('flightShell').hidden) return;
+    const canvas = $('flightCanvas'), ctx = canvas.getContext('2d');
+    const { w, h } = resizeCanvas(canvas);
+    const b = V.bodies[vessel.body];
+    const alt = altitude(vessel);
+    const inAtmosphere = !!(b.atmosphere && alt < b.atmosphere.height);
+    const atmosphereBlend = b.atmosphere ? clamp(alt / b.atmosphere.height, 0, 1) : 1;
+    const sky = ctx.createLinearGradient(0, 0, 0, h);
+    if (inAtmosphere) {
+      sky.addColorStop(0, '#3978ad'); sky.addColorStop(0.58, '#83b4d8'); sky.addColorStop(1, '#d4e2e8');
+    } else {
+      sky.addColorStop(0, '#020713'); sky.addColorStop(0.7, '#101d32'); sky.addColorStop(1, '#24364a');
+    }
+    ctx.fillStyle = sky; ctx.fillRect(0, 0, w, h);
+
+    for (const s of stars) {
+      ctx.globalAlpha = (inAtmosphere ? atmosphereBlend * 0.7 : 1) * s.a;
+      ctx.fillStyle = '#e8f1ff'; ctx.beginPath(); ctx.arc(s.x * w, s.y * h, s.r, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+
+    const horizonY = h * (0.84 - clamp(alt / 110000, 0, 1) * 0.17);
+    const globeR = Math.max(w * 0.7, h * 0.78);
+    const globeY = horizonY + globeR;
+    const planetGradient = ctx.createLinearGradient(0, horizonY, 0, h);
+    planetGradient.addColorStop(0, b.color);
+    planetGradient.addColorStop(1, '#172c3c');
+    ctx.fillStyle = planetGradient;
+    ctx.beginPath(); ctx.arc(w * 0.5, globeY, globeR, Math.PI, Math.PI * 2); ctx.lineTo(w, h); ctx.lineTo(0, h); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = inAtmosphere ? 'rgba(192,232,255,.82)' : 'rgba(135,179,224,.62)';
+    ctx.lineWidth = inAtmosphere ? 5 : 2;
+    ctx.beginPath(); ctx.arc(w * 0.5, globeY, globeR, Math.PI, Math.PI * 2); ctx.stroke();
+
+    if (alt < 9000 && b.name === 'Kerbin') {
+      const groundTop = Math.max(horizonY, h * 0.77);
+      ctx.fillStyle = '#587c55';
+      ctx.beginPath(); ctx.moveTo(0, groundTop + 28);
+      ctx.quadraticCurveTo(w * 0.18, groundTop - 24, w * 0.34, groundTop + 12);
+      ctx.quadraticCurveTo(w * 0.62, groundTop + 48, w * 0.78, groundTop - 12);
+      ctx.quadraticCurveTo(w * 0.9, groundTop - 36, w, groundTop + 10);
+      ctx.lineTo(w, h); ctx.lineTo(0, h); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = '#3e6347'; ctx.fillRect(0, groundTop + 38, w, h - groundTop - 38);
+      // Small deterministic tree silhouettes give the runway a readable scale.
+      const treeCount = Math.min(30, Math.floor(w / 38));
+      for (let i = 0; i < treeCount; i++) {
+        const x = (i / Math.max(1, treeCount - 1)) * w;
+        const variation = Math.sin(i * 19.71) * 13 + Math.cos(i * 4.13) * 7;
+        const base = groundTop + 26 + variation;
+        const size = 11 + (Math.sin(i * 8.9) + 1) * 7;
+        ctx.fillStyle = i % 3 === 0 ? '#274d39' : '#315c41';
+        ctx.fillRect(x - 2, base - size * 0.45, 4, size * 0.55);
+        ctx.beginPath(); ctx.moveTo(x, base - size * 1.8); ctx.lineTo(x - size * 0.55, base - size * 0.22); ctx.lineTo(x + size * 0.55, base - size * 0.22); ctx.closePath(); ctx.fill();
+      }
+      if (alt < 500) {
+        ctx.fillStyle = '#a7adb0'; ctx.fillRect(w * 0.38, groundTop + 36, w * 0.24, 5);
+        ctx.fillStyle = '#6e777b'; ctx.fillRect(w * 0.485, groundTop + 28, w * 0.03, 12);
+        ctx.strokeStyle = '#bdc8ca'; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(w * 0.48, groundTop + 40); ctx.lineTo(w * 0.48, groundTop - 22); ctx.lineTo(w * 0.43, groundTop - 8); ctx.moveTo(w * 0.52, groundTop + 40); ctx.lineTo(w * 0.52, groundTop - 22); ctx.lineTo(w * 0.57, groundTop - 8); ctx.stroke();
+      }
+    }
+
+    const parts = vessel.parts || editor.parts;
+    const validParts = parts.map(item => ({ item, def: item.definition || P.byKey[item.key] })).filter(entry => entry.def);
+    const bottom = validParts.length ? Math.min(...validParts.map(({ item, def }) => item.position[1] - def.height / 2)) : 0;
+    const top = validParts.length ? Math.max(...validParts.map(({ item, def }) => item.position[1] + def.height / 2)) : 10;
+    const maxWidth = validParts.length ? Math.max(...validParts.map(({ def }) => def.width + Math.abs(def.depth) * 0.25)) : 3;
+    const vesselHeight = Math.max(2, top - bottom);
+    const modelScale = clamp(Math.min(h * 0.57 / vesselHeight, w * 0.18 / Math.max(2, maxWidth)), 13, 46);
+    const craftX = w * 0.5 + Math.sin(vessel.yaw || 0) * Math.min(w * 0.08, 70);
+    const craftBaseY = h * 0.81 - clamp(alt / 110000, 0, 1) * h * 0.22;
+    const attitude = Math.atan2(vessel.heading[0], Math.max(0.02, vessel.heading[1]));
+
+    ctx.save();
+    ctx.translate(craftX, craftBaseY);
+    ctx.rotate(attitude);
+    const metallic = (x, width) => {
+      const grad = ctx.createLinearGradient(x - width / 2, 0, x + width / 2, 0);
+      grad.addColorStop(0, '#485963'); grad.addColorStop(0.18, '#aebdc4'); grad.addColorStop(0.48, '#e1e7e8'); grad.addColorStop(0.72, '#9baab0'); grad.addColorStop(1, '#43545f');
+      return grad;
+    };
+    const sortedParts = validParts.slice().sort((a, b) => a.item.position[1] - b.item.position[1]);
+    for (const { item, def } of sortedParts) {
+      const x = (item.position[0] + item.position[2] * 0.28) * modelScale;
+      const y = -(item.position[1] - bottom) * modelScale;
+      const pw = Math.max(4, def.width * modelScale);
+      const ph = Math.max(4, def.height * modelScale);
+      const pd = Math.max(3, def.depth * modelScale);
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.fillStyle = metallic(0, pw);
+      ctx.strokeStyle = '#263a48'; ctx.lineWidth = Math.max(1, modelScale * 0.025);
+
+      if (def.shape === 'cylinder') {
+        ctx.beginPath(); ctx.roundRect(-pw * 0.43, -ph / 2, pw * 0.86, ph, Math.min(pw * 0.28, 12)); ctx.fill(); ctx.stroke();
+        ctx.fillStyle = 'rgba(40,56,65,.5)'; ctx.fillRect(-pw * 0.4, -ph * 0.34, pw * 0.8, Math.max(2, ph * 0.025));
+        ctx.fillRect(-pw * 0.4, ph * 0.32, pw * 0.8, Math.max(2, ph * 0.025));
+        ctx.strokeStyle = 'rgba(255,255,255,.7)'; ctx.beginPath(); ctx.moveTo(-pw * 0.2, -ph * 0.36); ctx.lineTo(-pw * 0.2, ph * 0.34); ctx.stroke();
+      } else if (def.shape === 'engine') {
+        ctx.beginPath(); ctx.moveTo(-pw * 0.27, -ph * 0.5); ctx.lineTo(pw * 0.27, -ph * 0.5); ctx.lineTo(pw * 0.22, -ph * 0.19); ctx.lineTo(pw * 0.14, ph * 0.02); ctx.lineTo(pw * 0.4, ph * 0.47); ctx.quadraticCurveTo(0, ph * 0.58, -pw * 0.4, ph * 0.47); ctx.lineTo(-pw * 0.14, ph * 0.02); ctx.lineTo(-pw * 0.22, -ph * 0.19); ctx.closePath(); ctx.fill(); ctx.stroke();
+        ctx.fillStyle = '#303b42'; ctx.beginPath(); ctx.ellipse(0, ph * 0.43, pw * 0.28, ph * 0.045, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#d6a65e'; ctx.fillRect(-pw * 0.3, -ph * 0.45, pw * 0.6, Math.max(2, ph * 0.055));
+      } else if (def.shape === 'capsule' || def.shape === 'cockpit') {
+        ctx.beginPath(); ctx.moveTo(-pw * 0.43, ph * 0.48); ctx.lineTo(-pw * 0.47, -ph * 0.13); ctx.quadraticCurveTo(-pw * 0.45, -ph * 0.42, -pw * 0.18, -ph * 0.5); ctx.quadraticCurveTo(0, -ph * 0.57, pw * 0.18, -ph * 0.5); ctx.quadraticCurveTo(pw * 0.45, -ph * 0.42, pw * 0.47, -ph * 0.13); ctx.lineTo(pw * 0.43, ph * 0.48); ctx.closePath(); ctx.fill(); ctx.stroke();
+        ctx.fillStyle = '#263c52'; ctx.beginPath(); ctx.ellipse(0, -ph * 0.18, pw * 0.27, ph * 0.16, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.strokeStyle = '#d5e2e8'; ctx.lineWidth = 2; ctx.beginPath(); ctx.ellipse(0, -ph * 0.18, pw * 0.27, ph * 0.16, 0, 0, Math.PI * 2); ctx.stroke();
+        ctx.fillStyle = 'rgba(255,255,255,.45)'; ctx.fillRect(-pw * 0.18, -ph * 0.29, pw * 0.12, ph * 0.045);
+      } else if (def.shape === 'fairing' || def.shape === 'cone') {
+        ctx.beginPath(); ctx.moveTo(-pw * 0.46, ph * 0.5); ctx.lineTo(-pw * 0.46, -ph * 0.24); ctx.quadraticCurveTo(-pw * 0.28, -ph * 0.42, 0, -ph * 0.5); ctx.quadraticCurveTo(pw * 0.28, -ph * 0.42, pw * 0.46, -ph * 0.24); ctx.lineTo(pw * 0.46, ph * 0.5); ctx.closePath(); ctx.fill(); ctx.stroke();
+        ctx.strokeStyle = 'rgba(255,255,255,.6)'; ctx.beginPath(); ctx.moveTo(-pw * 0.36, -ph * 0.15); ctx.lineTo(-pw * 0.36, ph * 0.45); ctx.stroke();
+        ctx.strokeStyle = '#687b86'; ctx.beginPath(); ctx.moveTo(-pw * 0.46, ph * 0.46); ctx.lineTo(pw * 0.46, ph * 0.46); ctx.stroke();
+      } else if (def.shape === 'wing' || def.shape === 'delta') {
+        ctx.fillStyle = def.color || '#b9c2c6';
+        ctx.beginPath(); ctx.moveTo(-pw * 0.5, ph * 0.1); ctx.lineTo(-pw * 0.32, -ph * 0.35); ctx.lineTo(pw * 0.5, -ph * 0.05); ctx.lineTo(pw * 0.35, ph * 0.34); ctx.closePath(); ctx.fill(); ctx.stroke();
+      } else if (def.shape === 'gear') {
+        ctx.strokeStyle = '#aeb9bf'; ctx.lineWidth = Math.max(2, modelScale * 0.07);
+        const deployed = item.deployed !== false;
+        ctx.beginPath(); ctx.moveTo(0, deployed ? -ph * 0.2 : -ph * 0.32); ctx.lineTo(deployed ? pw * 0.15 : pw * 0.28, deployed ? ph * 0.36 : -ph * 0.05); ctx.stroke();
+        ctx.fillStyle = '#202a31'; ctx.beginPath(); ctx.ellipse(deployed ? pw * 0.15 : pw * 0.28, deployed ? ph * 0.39 : -ph * 0.02, Math.max(3, pw * 0.16), Math.max(5, ph * 0.09), 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      } else if (def.shape === 'solar') {
+        const deployed = item.deployed === true;
+        ctx.fillStyle = '#24527b'; ctx.strokeStyle = '#bccbd4'; ctx.lineWidth = 1.5;
+        const panelWidth = deployed ? pw * 0.86 : pw * 0.28;
+        const offset = deployed ? pw * 0.47 : pw * 0.13;
+        for (const side of [-1, 1]) {
+          ctx.fillRect(side * offset - panelWidth / 2, -ph * 0.42, panelWidth, ph * 0.84);
+          ctx.strokeRect(side * offset - panelWidth / 2, -ph * 0.42, panelWidth, ph * 0.84);
+          ctx.strokeStyle = 'rgba(177,220,245,.8)';
+          for (let i = 1; i < 5; i++) { const xx = side * offset - panelWidth / 2 + panelWidth * i / 5; ctx.beginPath(); ctx.moveTo(xx, -ph * 0.4); ctx.lineTo(xx, ph * 0.4); ctx.stroke(); }
+          for (let i = 1; i < 4; i++) { const yy = -ph * 0.4 + ph * 0.8 * i / 4; ctx.beginPath(); ctx.moveTo(side * offset - panelWidth / 2, yy); ctx.lineTo(side * offset + panelWidth / 2, yy); ctx.stroke(); }
+          ctx.strokeStyle = '#bccbd4';
+        }
+      } else if (def.shape === 'ring') {
+        ctx.beginPath(); ctx.roundRect(-pw * 0.48, -ph * 0.18, pw * 0.96, ph * 0.36, 5); ctx.fill(); ctx.stroke();
+        ctx.fillStyle = '#2c3e48'; ctx.fillRect(-pw * 0.27, -ph * 0.1, pw * 0.54, ph * 0.2);
+      } else if (def.shape === 'parachute') {
+        ctx.beginPath(); ctx.moveTo(-pw * 0.48, ph * 0.2); ctx.quadraticCurveTo(-pw * 0.5, -ph * 0.48, 0, -ph * 0.5); ctx.quadraticCurveTo(pw * 0.5, -ph * 0.48, pw * 0.48, ph * 0.2); ctx.closePath(); ctx.fill(); ctx.stroke();
+      } else {
+        ctx.beginPath(); ctx.roundRect(-pw * 0.46, -ph * 0.46, pw * 0.92, ph * 0.92, 4); ctx.fill(); ctx.stroke();
+      }
+      ctx.restore();
+    }
+
+    if (vessel.engineActive && vessel.throttle > 0 && vessel.fuel > 0) {
+      const plumeLength = modelScale * (2.5 + 4.2 * vessel.throttle);
+      const flame = ctx.createLinearGradient(0, 0, 0, plumeLength);
+      flame.addColorStop(0, '#fff8c1'); flame.addColorStop(0.18, '#ffe08a'); flame.addColorStop(0.55, '#ff963a'); flame.addColorStop(1, 'rgba(233,72,26,0)');
+      ctx.fillStyle = flame; ctx.beginPath(); ctx.moveTo(-modelScale * 0.18, 0); ctx.quadraticCurveTo(-modelScale * 0.3, plumeLength * 0.35, -modelScale * 0.05, plumeLength); ctx.quadraticCurveTo(0, plumeLength * 1.08, modelScale * 0.05, plumeLength); ctx.quadraticCurveTo(modelScale * 0.3, plumeLength * 0.35, modelScale * 0.18, 0); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = 'rgba(255,244,200,.6)'; ctx.beginPath(); ctx.moveTo(-modelScale * 0.08, 0); ctx.lineTo(0, plumeLength * 0.72); ctx.lineTo(modelScale * 0.08, 0); ctx.closePath(); ctx.fill();
+    }
+    ctx.restore();
+
+    ctx.fillStyle = 'rgba(8,18,29,.72)'; ctx.fillRect(12, h - 64, 290, 50);
+    ctx.fillStyle = '#eef6ff'; ctx.font = '12px ui-monospace, monospace';
+    ctx.fillText(b.name.toUpperCase() + ' / ' + (inAtmosphere ? 'ATMOSPHERIC FLIGHT' : 'SPACE FLIGHT'), 22, h - 43);
+    ctx.fillText('ALT ' + V.formatDistance(alt) + '  •  ' + Math.round(validParts.length) + ' ACTIVE PARTS', 22, h - 23);
+  }
+
   function drawFlightView() {
     if (!vessel || $('flightShell').hidden) return;
     const canvas = $('flightCanvas'), ctx = canvas.getContext('2d');
     const { w, h } = resizeCanvas(canvas);
-    ctx.fillStyle = '#060b18'; ctx.fillRect(0, 0, w, h);
-    for (const s of stars) { ctx.globalAlpha = s.a; ctx.fillStyle = '#dfe8fa'; ctx.beginPath(); ctx.arc(s.x * w, s.y * h, s.r, 0, Math.PI * 2); ctx.fill(); }
-    ctx.globalAlpha = 1;
-    const b = V.bodies[vessel.body];
+    const body = V.bodies[vessel.body] || V.bodies.Kerbin;
+    const radius = body.radius;
     const alt = altitude(vessel);
-    const surfaceR = Math.min(w * 0.43, h * 0.48);
-    const planetX = w * 0.5, planetY = h * 1.12;
-    const atmosphereR = surfaceR + Math.min(80, surfaceR * 0.15);
-    const atmo = ctx.createRadialGradient(planetX, planetY, surfaceR * 0.88, planetX, planetY, atmosphereR);
-    atmo.addColorStop(0, 'rgba(68,157,212,0)'); atmo.addColorStop(1, 'rgba(56,150,221,.48)');
-    ctx.fillStyle = atmo; ctx.beginPath(); ctx.arc(planetX, planetY, atmosphereR, Math.PI, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = b.color; ctx.beginPath(); ctx.arc(planetX, planetY, surfaceR, Math.PI, Math.PI * 2); ctx.fill();
-    ctx.strokeStyle = 'rgba(229,240,220,.18)'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(planetX, planetY, surfaceR - 15, Math.PI, Math.PI * 2); ctx.stroke();
-    // Exaggerated local altitude scale keeps the vehicle and horizon visible.
-    const craftX = w * 0.5 + Math.sin(vessel.yaw || 0) * 80;
-    const craftY = Math.max(90, h * 0.68 - Math.log1p(alt / 1500) * 50);
-    const angle = Math.atan2(vessel.heading[0], vessel.heading[1]);
-    ctx.save(); ctx.translate(craftX, craftY); ctx.rotate(angle);
-    ctx.fillStyle = '#d2d9da'; ctx.strokeStyle = '#101b25'; ctx.lineWidth = 2;
-    ctx.beginPath(); ctx.moveTo(0, -19); ctx.lineTo(10, 10); ctx.lineTo(0, 5); ctx.lineTo(-10, 10); ctx.closePath(); ctx.fill(); ctx.stroke();
-    if (vessel.engineActive && vessel.throttle > 0 && vessel.fuel > 0) {
-      ctx.fillStyle = '#f5a33e'; ctx.beginPath(); ctx.moveTo(-5, 8); ctx.lineTo(0, 21 + Math.random() * 10); ctx.lineTo(5, 8); ctx.closePath(); ctx.fill();
+    const radial = V.norm(vessel.position);
+    const shipUp = V.norm(vessel.heading);
+    let tangentForward = V.sub(shipUp, V.mul(radial, V.dot(shipUp, radial)));
+    if (V.len(tangentForward) < 0.05) {
+      const reference = Math.abs(radial[1]) < 0.9 ? [0, 1, 0] : [0, 0, 1];
+      const fallbackRight = V.norm(V.cross(radial, reference));
+      tangentForward = V.norm(V.cross(fallbackRight, radial));
+    } else tangentForward = V.norm(tangentForward);
+    const shipRight = V.norm(V.cross(radial, tangentForward));
+    const shipSide = V.norm(V.cross(shipRight, shipUp));
+    const cameraPos = V.add(vessel.position, V.add(V.mul(radial, 12), V.add(V.mul(tangentForward, -54), V.mul(shipRight, 9))));
+    const cameraTarget = V.add(vessel.position, V.mul(shipUp, 2.8));
+    const cameraForward = V.norm(V.sub(cameraTarget, cameraPos));
+    let cameraRight = V.norm(V.cross(cameraForward, radial));
+    if (V.len(cameraRight) < 0.05) cameraRight = shipRight;
+    const cameraUp = V.norm(V.cross(cameraRight, cameraForward));
+    const focal = Math.min(w, h) * 1.12;
+    const project = point => {
+      const delta = V.sub(point, cameraPos);
+      const depth = V.dot(delta, cameraForward);
+      if (depth <= 0.2) return null;
+      return { x: w / 2 + V.dot(delta, cameraRight) * focal / depth, y: h * 0.48 - V.dot(delta, cameraUp) * focal / depth, z: depth };
+    };
+
+    const atmosphere = body.atmosphere;
+    const atmosphereLevel = atmosphere ? clamp(alt / atmosphere.height, 0, 1) : 1;
+    const sky = ctx.createLinearGradient(0, 0, 0, h);
+    if (atmosphere && alt < atmosphere.height * 1.35) {
+      sky.addColorStop(0, atmosphereLevel < 0.65 ? '#2b6fa9' : '#153a60');
+      sky.addColorStop(0.55, atmosphereLevel < 0.65 ? '#76a9cb' : '#345d7d');
+      sky.addColorStop(1, atmosphereLevel < 0.65 ? '#d4e0df' : '#9aabb3');
+    } else {
+      sky.addColorStop(0, '#020711'); sky.addColorStop(0.72, '#081426'); sky.addColorStop(1, '#15273b');
     }
-    ctx.restore();
-    ctx.fillStyle = 'rgba(6,12,21,.72)'; ctx.fillRect(10, h - 60, 250, 48);
-    ctx.fillStyle = '#d9e6ed'; ctx.font = '12px monospace';
-    ctx.fillText(b.name.toUpperCase() + ' / SURFACE REFERENCE', 20, h - 40);
-    ctx.fillText('LOCAL ALTITUDE ' + V.formatDistance(alt) + ' · ' + (b.atmosphere && alt < b.atmosphere.height ? 'ATMOSPHERE' : 'SPACE'), 20, h - 21);
+    ctx.fillStyle = sky; ctx.fillRect(0, 0, w, h);
+    const starAlpha = atmosphere ? clamp(alt / (atmosphere.height * 0.55), 0, 1) : 1;
+    if (starAlpha > 0) {
+      for (const star of stars) {
+        ctx.globalAlpha = star.a * starAlpha;
+        ctx.fillStyle = '#eaf4ff'; ctx.beginPath(); ctx.arc(star.x * w, star.y * h, star.r, 0, Math.PI * 2); ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+    }
+    const sunX = w * 0.82, sunY = h * 0.16;
+    const sunGlow = ctx.createRadialGradient(sunX, sunY, 2, sunX, sunY, Math.min(w, h) * 0.23);
+    sunGlow.addColorStop(0, 'rgba(255,246,207,.95)'); sunGlow.addColorStop(0.06, 'rgba(255,220,151,.3)'); sunGlow.addColorStop(1, 'rgba(255,212,140,0)');
+    ctx.fillStyle = sunGlow; ctx.fillRect(sunX - h * 0.25, sunY - h * 0.25, h * 0.5, h * 0.5);
+
+    const sceneFaces = [];
+    if (alt < 28000 && body.surface) {
+      const range = clamp(14000 + alt * 4.2, 14000, 155000);
+      const columns = 18, rows = 18;
+      const grid = [];
+      for (let zIndex = 0; zIndex <= rows; zIndex++) {
+        const row = [];
+        const z = range * zIndex / rows;
+        for (let xIndex = 0; xIndex <= columns; xIndex++) {
+          const x = (xIndex / columns - 0.5) * range * 1.35;
+          const texture = Math.sin(x * 0.0017 + z * 0.00043) * 13 + Math.cos(z * 0.00115 - x * 0.00062) * 9 + Math.sin((x + z) * 0.00019) * 23;
+          const curvature = (x * x + z * z) / (2 * radius);
+          const terrainHeight = texture - curvature;
+          const point = V.add(V.mul(radial, radius + terrainHeight), V.add(V.mul(shipRight, x), V.mul(tangentForward, z)));
+          row.push({ world: point, texture, x, z });
+        }
+        grid.push(row);
+      }
+      for (let iz = 0; iz < rows; iz++) for (let ix = 0; ix < columns; ix++) {
+        const quad = [grid[iz][ix], grid[iz][ix + 1], grid[iz + 1][ix + 1], grid[iz + 1][ix]];
+        for (const tri of [[quad[0], quad[1], quad[2]], [quad[0], quad[2], quad[3]]]) {
+          const projected = tri.map(point => project(point.world));
+          if (projected.some(point => !point)) continue;
+          const depth = projected.reduce((sum, point) => sum + point.z, 0) / 3;
+          const texture = tri.reduce((sum, point) => sum + point.texture, 0) / 3;
+          const shade = clamp(0.5 + texture / 110, 0, 1);
+          let color;
+          if (body.name === 'Kerbin' || body.name === 'Laythe') color = shade > 0.54 ? (shade > 0.72 ? '#78915b' : '#597c50') : '#8b9a69';
+          else if (body.name === 'Duna') color = shade > 0.5 ? '#b96f4e' : '#87513d';
+          else color = shade > 0.5 ? '#827c70' : '#5c5960';
+          sceneFaces.push({ projected, depth, color });
+        }
+      }
+    } else if (body.surface) {
+      const latitudes = 12, longitudes = 24;
+      const pointAt = (lat, lon, r = radius) => [r * Math.cos(lat) * Math.cos(lon), r * Math.sin(lat), r * Math.cos(lat) * Math.sin(lon)];
+      const sphere = [];
+      for (let y = 0; y <= latitudes; y++) {
+        const row = [];
+        const lat = -Math.PI / 2 + Math.PI * y / latitudes;
+        for (let x = 0; x <= longitudes; x++) row.push(pointAt(lat, Math.PI * 2 * x / longitudes));
+        sphere.push(row);
+      }
+      for (let y = 0; y < latitudes; y++) for (let x = 0; x < longitudes; x++) {
+        const a = sphere[y][x], b = sphere[y][x + 1], c = sphere[y + 1][x + 1], d = sphere[y + 1][x];
+        for (const tri of [[a, b, c], [a, c, d]]) {
+          const center = V.mul(V.add(V.add(tri[0], tri[1]), tri[2]), 1 / 3);
+          const normal = V.norm(V.cross(V.sub(tri[1], tri[0]), V.sub(tri[2], tri[0])));
+          if (V.dot(normal, V.sub(cameraPos, center)) >= 0) continue;
+          const projected = tri.map(project);
+          if (projected.some(point => !point)) continue;
+          const depth = projected.reduce((sum, point) => sum + point.z, 0) / 3;
+          const lat = center[1] / radius;
+          const land = Math.sin(center[0] / radius * 19 + center[2] / radius * 13) + Math.cos(center[2] / radius * 27 - center[1] / radius * 8);
+          let color;
+          if (body.name === 'Kerbin' || body.name === 'Laythe') color = land > 0.55 ? '#66885b' : (land > -0.1 ? '#477e9e' : '#286184');
+          else if (body.name === 'Duna') color = land > 0.2 ? '#b76c4b' : '#844b3b';
+          else color = lat > 0.72 ? '#c6c5b7' : (land > 0.25 ? '#928a7a' : '#716e68');
+          sceneFaces.push({ projected, depth, color });
+        }
+      }
+
+      if (atmosphere) {
+        const cameraDirection = V.norm(cameraPos);
+        let ringU = V.norm(V.cross(cameraDirection, [0, 1, 0]));
+        if (V.len(ringU) < 0.05) ringU = [1, 0, 0];
+        const ringV = V.norm(V.cross(cameraDirection, ringU));
+        const shellRadius = radius + atmosphere.height;
+        const distance = V.len(cameraPos);
+        if (distance > shellRadius) {
+          const ringCenter = V.mul(cameraDirection, shellRadius * shellRadius / distance);
+          const ringRadius = shellRadius * Math.sqrt(Math.max(0, 1 - shellRadius * shellRadius / (distance * distance)));
+          ctx.beginPath();
+          for (let i = 0; i <= 64; i++) {
+            const angle = i / 64 * Math.PI * 2;
+            const point = V.add(ringCenter, V.mul(V.add(V.mul(ringU, Math.cos(angle)), V.mul(ringV, Math.sin(angle))), ringRadius));
+            const screen = project(point);
+            if (!screen) continue;
+            if (!i) ctx.moveTo(screen.x, screen.y); else ctx.lineTo(screen.x, screen.y);
+          }
+          ctx.strokeStyle = 'rgba(113,194,245,.52)'; ctx.lineWidth = 13; ctx.stroke();
+          ctx.strokeStyle = 'rgba(183,226,255,.78)'; ctx.lineWidth = 3; ctx.stroke();
+        }
+      }
+    }
+
+    sceneFaces.sort((a, b) => b.depth - a.depth);
+    for (const face of sceneFaces) {
+      ctx.fillStyle = face.color;
+      ctx.beginPath(); ctx.moveTo(face.projected[0].x, face.projected[0].y);
+      ctx.lineTo(face.projected[1].x, face.projected[1].y); ctx.lineTo(face.projected[2].x, face.projected[2].y); ctx.closePath(); ctx.fill();
+    }
+
+    if (alt < 18000 && body.name === 'Kerbin') {
+      const treeCount = Math.min(24, Math.floor(w / 55));
+      for (let i = 0; i < treeCount; i++) {
+        const x = (i / Math.max(1, treeCount - 1) - 0.5) * 2100;
+        const z = 600 + (i * 617 % 7600);
+        const groundHeight = radius - (x * x + z * z) / (2 * radius) + Math.sin(i * 12.7) * 8;
+        const base = V.add(V.mul(radial, groundHeight), V.add(V.mul(shipRight, x), V.mul(tangentForward, z)));
+        const height = 9 + (i * 7 % 13), width = height * 0.38;
+        const left = project(V.add(base, V.mul(shipRight, -width)));
+        const right = project(V.add(base, V.mul(shipRight, width)));
+        const top = project(V.add(base, V.mul(radial, height)));
+        if (!left || !right || !top) continue;
+        ctx.fillStyle = i % 3 ? '#31563c' : '#446b48';
+        ctx.beginPath(); ctx.moveTo(left.x, left.y); ctx.lineTo(top.x, top.y); ctx.lineTo(right.x, right.y); ctx.closePath(); ctx.fill();
+      }
+    }
+
+    const parts = vessel.parts || [];
+    const validParts = parts.map(item => ({ item, def: item.definition || P.byKey[item.key] })).filter(entry => entry.def);
+    const bottom = validParts.length ? Math.min(...validParts.map(({ item, def }) => item.position[1] - def.height / 2)) : 0;
+    const toWorld = local => V.add(vessel.position, V.add(V.mul(shipRight, local[0]), V.add(V.mul(shipUp, local[1]), V.mul(shipSide, local[2]))));
+    const craftFaces = [];
+    for (const { item, def } of validParts) {
+      const geometry = editor.geometryFor(item);
+      for (const tri of geometry) {
+        const world = tri.map(vertex => {
+          const rotated = editor.rotate(vertex, item.rotation);
+          return toWorld([item.position[0] + rotated[0], item.position[1] - bottom + rotated[1], item.position[2] + rotated[2]]);
+        });
+        const projected = world.map(project);
+        if (projected.some(point => !point)) continue;
+        const depth = projected.reduce((sum, point) => sum + point.z, 0) / 3;
+        const normal = V.norm(V.cross(V.sub(world[1], world[0]), V.sub(world[2], world[0])));
+        const light = clamp(0.48 + V.dot(normal, V.norm([0.4, 0.8, 0.45])) * 0.48, 0.22, 1);
+        const rgb = def.color.match(/[\da-f]{2}/gi)?.map(value => parseInt(value, 16)) || [170, 180, 188];
+        const color = 'rgb(' + rgb.map(value => Math.round(clamp(value * light, 0, 255))).join(',') + ')';
+        craftFaces.push({ projected, depth, color });
+      }
+    }
+    craftFaces.sort((a, b) => b.depth - a.depth);
+    for (const face of craftFaces) {
+      ctx.fillStyle = face.color;
+      ctx.strokeStyle = 'rgba(18,35,49,.38)'; ctx.lineWidth = 0.8;
+      ctx.beginPath(); ctx.moveTo(face.projected[0].x, face.projected[0].y);
+      ctx.lineTo(face.projected[1].x, face.projected[1].y); ctx.lineTo(face.projected[2].x, face.projected[2].y); ctx.closePath(); ctx.fill(); ctx.stroke();
+    }
+
+    if (vessel.engineActive && vessel.throttle > 0 && vessel.fuel > 0) {
+      for (const { item, def } of validParts.filter(entry => entry.def.thrust > 0)) {
+        const nozzle = toWorld([item.position[0], item.position[1] - bottom - def.height * 0.48, item.position[2]]);
+        const plumeLength = 7 + vessel.throttle * 17;
+        const width = Math.max(0.35, Math.min(def.width * 0.24, 1.7));
+        const baseA = project(V.add(nozzle, V.mul(shipRight, -width)));
+        const baseB = project(V.add(nozzle, V.mul(shipRight, width)));
+        const tip = project(V.sub(nozzle, V.mul(shipUp, plumeLength)));
+        if (!baseA || !baseB || !tip) continue;
+        const flame = ctx.createLinearGradient((baseA.x + baseB.x) / 2, (baseA.y + baseB.y) / 2, tip.x, tip.y);
+        flame.addColorStop(0, 'rgba(255,255,215,.96)'); flame.addColorStop(0.2, 'rgba(255,190,75,.92)'); flame.addColorStop(0.65, 'rgba(255,94,31,.66)'); flame.addColorStop(1, 'rgba(255,80,30,0)');
+        ctx.fillStyle = flame; ctx.beginPath(); ctx.moveTo(baseA.x, baseA.y); ctx.lineTo(tip.x, tip.y); ctx.lineTo(baseB.x, baseB.y); ctx.closePath(); ctx.fill();
+      }
+    }
+
+    if (atmosphere && alt < atmosphere.height) {
+      const haze = ctx.createLinearGradient(0, h * 0.43, 0, h);
+      haze.addColorStop(0, 'rgba(140,204,239,0)'); haze.addColorStop(1, 'rgba(138,191,221,' + (0.08 + (1 - atmosphereLevel) * 0.13) + ')');
+      ctx.fillStyle = haze; ctx.fillRect(0, h * 0.35, w, h * 0.65);
+    }
+    ctx.fillStyle = 'rgba(5,14,25,.72)'; ctx.fillRect(12, h - 56, 345, 42);
+    ctx.fillStyle = '#eef6ff'; ctx.font = '11px ui-monospace, monospace';
+    ctx.fillText(body.name.toUpperCase() + ' • 3D CHASE CAMERA • ' + (atmosphere && alt < atmosphere.height ? 'ATMOSPHERE' : 'SPACE'), 22, h - 38);
+    ctx.fillText('ALT ' + V.formatDistance(alt) + '  /  V/S ' + V.dot(vessel.velocity, radial).toFixed(1) + ' m/s  /  ' + validParts.length + ' PARTS', 22, h - 21);
   }
 
   function drawNavball() {
@@ -2000,6 +2573,85 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   }
 
   function openCustomPart() { showModal('customModal'); }
+  function syncFairingProfileText() {
+    try {
+      const config = JSON.parse($('fairingProfileCode').value);
+      config.profile = fairingProfilePoints.map(point => point.slice());
+      $('fairingProfileCode').value = JSON.stringify(config, null, 2);
+    } catch (_) { log('FIX THE FAIRING JSON BEFORE USING THE PROFILE CANVAS'); }
+    drawFairingProfile();
+  }
+
+  function drawFairingProfile() {
+    const canvas = $('fairingProfileCanvas');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d'), w = canvas.width, h = canvas.height;
+    ctx.clearRect(0, 0, w, h);
+    ctx.fillStyle = '#f5f8fa'; ctx.fillRect(0, 0, w, h);
+    ctx.strokeStyle = '#d8e2e8'; ctx.lineWidth = 1;
+    for (let i = 1; i < 10; i++) {
+      const x = w * i / 10, y = h * i / 10;
+      ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke();
+    }
+    ctx.strokeStyle = '#7e97a7'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(12, h - 15); ctx.lineTo(w - 12, h - 15); ctx.lineTo(w - 12, 12); ctx.stroke();
+    const points = fairingProfilePoints.map(point => [point[0] * (w - 24) + 12, (1 - point[1]) * (h - 30) + 15]);
+    ctx.beginPath(); ctx.moveTo(12, h - 15);
+    for (const point of points) ctx.lineTo(point[0], point[1]);
+    ctx.lineTo(12, 15); ctx.closePath();
+    const fill = ctx.createLinearGradient(0, 12, 0, h - 12); fill.addColorStop(0, 'rgba(147,185,207,.2)'); fill.addColorStop(1, 'rgba(64,130,163,.34)');
+    ctx.fillStyle = fill; ctx.fill();
+    ctx.strokeStyle = '#168bb5'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(12, h - 15);
+    for (const point of points) ctx.lineTo(point[0], point[1]);
+    ctx.stroke();
+    for (const [x, y] of points) {
+      ctx.fillStyle = '#ffffff'; ctx.strokeStyle = '#087da8'; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(x, y, 5, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    }
+    $('fairingPointCount').textContent = fairingProfilePoints.length + ' PROFILE POINTS';
+  }
+
+  function addFairingProfilePoint(event) {
+    const canvas = $('fairingProfileCanvas'), rect = canvas.getBoundingClientRect();
+    const radius = clamp((event.clientX - rect.left) / rect.width, 0.03, 1);
+    const height = clamp(1 - (event.clientY - rect.top) / rect.height, 0.02, 0.98);
+    if (fairingProfilePoints.some(point => Math.abs(point[1] - height) < 0.035)) { log('MOVE THE NEW PROFILE POINT TO A DIFFERENT HEIGHT'); return; }
+    fairingProfilePoints.push([Number(radius.toFixed(3)), Number(height.toFixed(3))]);
+    fairingProfilePoints.sort((a, b) => a[1] - b[1]);
+    if (fairingProfilePoints.length > 16) fairingProfilePoints.pop();
+    syncFairingProfileText();
+  }
+
+  function createFairingPart() {
+    try {
+      const config = JSON.parse($('fairingProfileCode').value);
+      if (!Array.isArray(config.profile) || config.profile.length < 3 || config.profile.length > 16) throw new Error('Add between 3 and 16 radius/height profile points.');
+      let previousHeight = -1;
+      for (const point of config.profile) {
+        if (!Array.isArray(point) || point.length !== 2 || !point.every(value => Number.isFinite(Number(value)) && Number(value) >= 0 && Number(value) <= 1)) throw new Error('Each profile point needs [radius fraction, height fraction] between 0 and 1.');
+        if (Number(point[1]) <= previousHeight) throw new Error('Profile height fractions must increase from bottom to top.');
+        previousHeight = Number(point[1]);
+      }
+      const def = P.validateCustomPart({ ...config, shape: 'cone', fuel: 0, thrust: 0, isp: 0 });
+      def.shape = 'fairing';
+      def.category = 'Custom';
+      def.profile = config.profile.map(point => point.map(Number));
+      def.description = 'Custom revolved payload fairing built from editable profile points.';
+      def.nodes = [{ p: [0, -def.height / 2, 0], type: 'bottom' }, { p: [0, def.height / 2, 0], type: 'top' }];
+      const existing = customParts.findIndex(part => part.key === def.key);
+      if (existing >= 0) customParts[existing] = def; else customParts.push(def);
+      currentCategory = 'Custom';
+      document.querySelectorAll('.category-button').forEach(button => button.classList.toggle('active', button.dataset.category === 'Custom'));
+      selectedCatalogKey = def.key;
+      renderCatalog();
+      editor.setTemplate(def.key, def);
+      hideModal('fairingModal');
+      log('FAIRING BUILT — DRAG ITS PROFILE ONTO YOUR CRAFT');
+    } catch (error) {
+      log('FAIRING PROFILE ERROR: ' + error.message);
+    }
+  }
   function validateCustomPart() {
     const result = $('customResult');
     try {
@@ -2119,7 +2771,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
     if (currentView === 'vab' || currentView === 'sph') {
       if (['1', '2', '3', '4'].includes(key)) setMode(['place', 'offset', 'rotate', 'root'][Number(key) - 1]);
       if (key === 'delete' || key === 'backspace') { editor.deleteSelected(); log('PART REMOVED'); }
-      if (key === 'c') { editor.snap = !editor.snap; updateStatusButtons(); editor.render(); log('NODE SNAP ' + (editor.snap ? 'ON' : 'OFF')); }
+      if (key === 'c') { editor.snap = !editor.snap; updateStatusButtons(); editor.render(); log('CENTER STACK SNAP ' + (editor.snap ? 'ON' : 'OFF')); }
       if (key === 'escape') editor.setTemplate(null);
       if (key === 'q' || key === 'e') editor.rotateSelected(1, key === 'q' ? -Math.PI / 2 : Math.PI / 2);
     } else if (currentView === 'flight') {
@@ -2131,7 +2783,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
       if (key === 'm') toggleMap();
       if (key === '.') stepWarp(1);
       if (key === ',') stepWarp(-1);
-      if (key === 'g') { vessel.gear = !vessel.gear; log('LANDING GEAR ' + (vessel.gear ? 'DOWN' : 'UP')); }
+      if (key === 'g') toggleFlightDeployable('gear');
       if (key === 'b') { vessel.brakes = !vessel.brakes; log('BRAKES ' + (vessel.brakes ? 'ON' : 'OFF')); }
       if (key === 'u') { vessel.lights = !vessel.lights; log('LIGHTS ' + (vessel.lights ? 'ON' : 'OFF')); }
       if (key === 'f5') quickSaveFlight();
@@ -2173,6 +2825,12 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
     on('importCraftBtn', 'click', () => $('fileInput').click());
     on('fileInput', 'change', e => { if (e.target.files && e.target.files[0]) importCraftFile(e.target.files[0]); e.target.value = ''; });
     on('customPartBtn', 'click', openCustomPart); on('validateCustomBtn', 'click', validateCustomPart);
+    on('fairingBuilderBtn', 'click', () => { drawFairingProfile(); showModal('fairingModal'); });
+    on('createFairingBtn', 'click', createFairingPart);
+    on('fairingProfileCanvas', 'click', addFairingProfilePoint);
+    on('undoFairingPointBtn', 'click', () => { if (fairingProfilePoints.length > 3) fairingProfilePoints.pop(); syncFairingProfileText(); });
+    on('resetFairingProfileBtn', 'click', () => { fairingProfilePoints = defaultFairingProfile.map(point => point.slice()); syncFairingProfileText(); });
+    on('toggleDeployBtn', 'click', toggleSelectedDeployable);
     on('flagBtn', 'click', openFlagEditor); on('saveFlagBtn', 'click', saveFlag); on('downloadFlagBtn', 'click', () => downloadCanvas($('flagCanvas'), 'bsp-flag.png'));
     for (const key of ['flagColor1', 'flagColor2', 'flagColor3', 'flagPattern', 'flagEmblem', 'agencyNameInput']) on(key, 'input', () => {
       flagData = { ...flagData, name: $('agencyNameInput').value, color1: $('flagColor1').value, color2: $('flagColor2').value, color3: $('flagColor3').value, pattern: $('flagPattern').value, emblem: $('flagEmblem').value, emblemText: $('flagEmblemText').value, emblemScale: Number($('flagEmblemScale').value) };
@@ -2197,7 +2855,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
       e.target.value = '';
     });
     on('clearFlagImageBtn', 'click', () => { flagImage = null; flagData.imageData = null; updateFlagCanvas(); log('UPLOADED FLAG REMOVED'); });
-    on('snapPill', 'click', () => { editor.snap = !editor.snap; updateStatusButtons(); editor.render(); log('NODE SNAP ' + (editor.snap ? 'ON' : 'OFF')); });
+    on('snapPill', 'click', () => { editor.snap = !editor.snap; updateStatusButtons(); editor.render(); log('CENTER STACK SNAP ' + (editor.snap ? 'ON' : 'OFF')); });
     on('multiBtn', 'click', () => showModal('multiModal'));
     on('sameAgencyBtn', 'click', () => joinMultiplayer('same'));
     on('rivalAgencyBtn', 'click', () => joinMultiplayer('compete'));
@@ -2215,6 +2873,8 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
     on('executeNodeBtn', 'click', executeManeuver);
     on('deployBeaconBtn', 'click', deployBeacon);
     on('stageBtn', 'click', handleStage);
+    on('gearFlightBtn', 'click', () => toggleFlightDeployable('gear'));
+    on('panelsFlightBtn', 'click', () => toggleFlightDeployable('solar'));
     on('throttleRange', 'input', e => { if (vessel) vessel.throttle = Number(e.target.value) / 100; });
     on('sasBtn', 'click', () => { if (vessel) { vessel.sas = !vessel.sas; updateFlightHud(); } });
     on('rcsBtn', 'click', () => { if (vessel) { vessel.rcs = !vessel.rcs; updateFlightHud(); } });
