@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="160" viewBox="0 0 512 160">
+  <rect x="4" y="4" width="152" height="152" rx="18" fill="#c0c0c0" stroke="#25384c" stroke-width="8"/>
+  <path d="M30 45h100v25H30zM30 90h100v25H30z" fill="#1a5c88"/>
+  <path d="M46 22h73v116H46z" fill="none" stroke="#f0e6c8" stroke-width="8"/>
+  <text x="79" y="107" text-anchor="middle" font-family="Georgia,serif" font-size="90" font-weight="bold" fill="#d7a940">B</text>
+  <text x="184" y="78" font-family="Tahoma,Verdana,sans-serif" font-size="43" font-weight="bold" fill="#173a57">BOB SPACE</text>
+  <text x="184" y="125" font-family="Tahoma,Verdana,sans-serif" font-size="43" font-weight="bold" fill="#173a57">PROGRAM</text>
+</svg>

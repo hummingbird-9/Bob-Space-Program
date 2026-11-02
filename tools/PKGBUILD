@@ -1,0 +1,19 @@
+pkgname=bsp-server
+pkgver=0.1.0
+pkgrel=1
+pkgdesc='Bob Space Program LAN relay and static game files'
+arch=('x86_64')
+license=('custom')
+options=('!strip')
+package() {
+  install -Dm755 "__ROOT__/dist/bsp_server" "$pkgdir/usr/bin/bsp_server"
+  install -Dm644 "__ROOT__/index.html" "$pkgdir/usr/share/bsp/index.html"
+  cp -r "__ROOT__/css" "__ROOT__/js" "__ROOT__/png" "__ROOT__/assets" "$pkgdir/usr/share/bsp/"
+  install -d "$pkgdir/usr/bin"
+  cat > "$pkgdir/usr/bin/bsp-server-launch" <<'LAUNCH'
+#!/bin/sh
+cd /usr/share/bsp
+exec /usr/bin/bsp_server
+LAUNCH
+  chmod 755 "$pkgdir/usr/bin/bsp-server-launch"
+}

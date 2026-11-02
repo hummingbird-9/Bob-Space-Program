@@ -1,0 +1,13 @@
+{
+  "name": "bob-space-program",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Low-poly browser spaceflight and vehicle construction prototype",
+  "scripts": {
+    "start:lan": "node server/server.js",
+    "check": "node --check js/parts.js && node --check js/physics.js && node --check js/editor.js && node --check js/main.js && node --check server/server.js"
+  },
+  "devDependencies": {
+    "pkg": "5.8.1"
+  }
+}
