@@ -1,0 +1,9 @@
+Bob Space Program — version 66
+
+This package contains the latest saved single-file browser build as index.html.
+
+Deployment:
+1. Extract index.html into the root of your GitHub Pages repository.
+2. Commit and push the change.
+
+The Three.js flight renderer is loaded from jsDelivr at runtime. An internet connection is required for the WebGL renderer; the built-in canvas renderer remains as a fallback.

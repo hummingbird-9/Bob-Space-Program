@@ -152,6 +152,7 @@ input[type="color"] { width: 100%; min-height: 32px; padding: 2px; }
   .navball-frame canvas { width: 118px; height: 118px; }
 }
 .map-shell { display: flex; flex: 1; flex-direction: column; min-height: 0; background: #07101d; color: #eef6ff; }
+.map-shell #mapCanvas { flex: 1 1 auto; min-height: 0; }
 .map-header, .map-footer { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 11px; font: 10px monospace; }
 .map-footer { border-top: 1px solid rgba(255,255,255,.15); }
 .modal-backdrop { position: fixed; inset: 0; z-index: 50; display: grid; place-items: center; padding: 18px; background: rgba(12,24,36,.48); backdrop-filter: blur(5px); }
@@ -208,6 +209,43 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   .navball-frame { transform: scale(.75); transform-origin: left bottom; }
   .flight-controls { width: 68%; }
 }
+
+/* Instrument-panel finish: fewer decorative cards, tighter labels, flatter controls. */
+:root {
+  --site-primary: #315d74;
+  --site-secondary: #527d83;
+  --app-panel: light-dark(#f7f8f6, #20272d);
+  --app-panel-soft: light-dark(#edf0ee, #29333a);
+  --app-workspace: light-dark(#dfe5e2, #151c21);
+  --app-border: light-dark(#bdc8c5, #414e53);
+  --app-text: light-dark(#26343a, #dce4e2);
+  --app-muted: light-dark(#64747a, #9aa9a7);
+  --app-accent: #527d83;
+  --app-accent-soft: light-dark(#e1eae7, #2b3b3e);
+  --app-shadow: 0 2px 5px rgba(22,39,44,.07);
+}
+.titlebar { background: #f7f8f6; color: var(--app-text); border-bottom: 1px solid var(--app-border); }
+.panel-title { background: var(--app-panel-soft); color: var(--app-text); letter-spacing: .055em; }
+.brandmark { border-radius: 3px; box-shadow: none; }
+.side-panel, .work-area, .modal, .navball-frame, .flight-controls { border-radius: 4px; box-shadow: none; }
+.tool-button, .category-button, .mode-button, .stage-button { border-radius: 3px; box-shadow: none; letter-spacing: 0; font-weight: 600; }
+.part-item { border-radius: 3px; }
+.part-swatch { border-radius: 2px; box-shadow: none; }
+.hint-box { border-radius: 3px; }
+.overlay-pill { border-radius: 2px; letter-spacing: 0; }
+.modal { border-radius: 4px; }
+.title-copy strong { letter-spacing: .055em; }
+.title-copy span { letter-spacing: .07em; }
+.flight-top-hud { flex-wrap: wrap; }
+.map-node-editor { display: grid; grid-template-columns: repeat(4,minmax(95px,1fr)) auto; align-items: end; gap: 8px; padding: 9px 12px; border-top: 1px solid rgba(255,255,255,.12); background: #111e2b; color: #dce8ee; }
+.map-node-editor[hidden] { display: none; }
+.map-node-editor label { display: flex; flex-direction: column; gap: 4px; font: 10px monospace; }
+.map-node-editor output { color: #e9c978; }
+.map-node-editor input { width: 100%; accent-color: #e9c978; }
+.map-node-editor button { border-color: #536979; background: #283d4e; color: #edf4f6; }
+.map-footer { background: #101b28; }
+.flight-engine-data { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 6px; color: #b8c9d2; font: 9px monospace; }
+@media (max-width: 760px) { .map-node-editor { grid-template-columns: repeat(2,minmax(0,1fr)); } }
 </style>
 
 </head>
@@ -330,15 +368,26 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
               </div>
               <input id="throttleRange" type="range" min="0" max="100" value="100" aria-label="Throttle">
               <div class="button-row"><button id="stageBtn" class="stage-button">STAGE / SPACE</button><button id="sasBtn" class="tool-button active">SAS: ON</button><button id="rcsBtn" class="tool-button">RCS: OFF</button></div>
+              <div class="button-row"><button id="twrLimitBtn" class="tool-button active">AUTO TWR LIMIT: ON</button></div>
+              <div class="button-row"><button id="gravityTurnBtn" class="tool-button active">GRAVITY TURN ASSIST: ON</button></div>
+              <div class="button-row"><button id="volumetricPlumeBtn" class="tool-button">VOLUMETRIC PLUME: OFF</button></div>
+              <div class="flight-engine-data"><span id="gravityReadout">g 9.81 m/s²</span><span id="dragReadout">DRAG ρ 1.225</span><span id="flightForceReadout">ENGINE: READY</span></div>
               <div class="timewarp-row"><span>TIME WARP</span><button id="warpDown">−</button><b id="warpValue">1×</b><button id="warpUp">+</button><button id="warpPause">PAUSE</button></div>
             </div>
           </div>
         </div>
 
         <div class="map-shell" id="mapShell" hidden>
-          <div class="map-header"><b>TRACKING STATION — KERBOL SYSTEM</b><div><button id="scaleToggle" class="tool-button">LOG MAP</button><button id="mapReturnBtn" class="tool-button">BACK</button></div></div>
+          <div class="map-header"><b>TRACKING STATION — KERBOL SYSTEM</b><div><button id="mapModeToggle" class="tool-button">ORBIT VIEW</button><button id="scaleToggle" class="tool-button">LOG MAP</button><button id="mapReturnBtn" class="tool-button">BACK</button></div></div>
           <canvas id="mapCanvas" aria-label="Kerbol system map"></canvas>
-          <div class="map-footer"><span id="mapReadout">PHYSICAL ORBITS • KSP BODY NAMES</span><button id="addNodeBtn" class="tool-button">ADD MANEUVER NODE</button><button id="executeNodeBtn" class="tool-button">EXECUTE NODE</button><button id="deployBeaconBtn" class="tool-button">DEPLOY SURVEY BEACON</button></div>
+          <div class="map-node-editor" id="maneuverEditor" hidden>
+            <label>PROGRADE <output id="nodeProgradeOut">+150 m/s</output><input id="nodePrograde" type="range" min="-1500" max="1500" step="5" value="150"></label>
+            <label>NORMAL <output id="nodeNormalOut">0 m/s</output><input id="nodeNormal" type="range" min="-1000" max="1000" step="5" value="0"></label>
+            <label>RADIAL <output id="nodeRadialOut">0 m/s</output><input id="nodeRadial" type="range" min="-1000" max="1000" step="5" value="0"></label>
+            <label>TIME TO NODE <output id="nodeTimeOut">120 s</output><input id="nodeTime" type="range" min="0" max="3600" step="5" value="120"></label>
+            <button id="deleteNodeBtn" class="tool-button">DELETE NODE</button>
+          </div>
+          <div class="map-footer"><span id="mapReadout">PHYSICAL ORBITS • KSP BODY NAMES</span><button id="addNodeBtn" class="tool-button">ADD MANEUVER NODE</button><button id="executeNodeBtn" class="tool-button">ARM / EXECUTE NODE</button><button id="deployBeaconBtn" class="tool-button">DEPLOY SURVEY BEACON</button></div>
         </div>
 
         <div class="work-statusbar"><span id="workStatus">READY — SELECT A PART TO BEGIN</span><span id="craftSize">0 PARTS</span><span id="fpsReadout">CANVAS / 2D SOFTWARE RENDERER</span></div>
@@ -882,7 +931,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 
   function makeVessel(parts, definitions) {
     const defs = definitions || window.BSPParts.byKey;
-    let dryMass = 0, fuel = 0, thrust = 0, ispWeighted = 0, wingArea = 0, camber = 0;
+    let dryMass = 0, fuel = 0, thrust = 0, ispWeighted = 0, wingArea = 0, camber = 0, maxFrontalArea = 0;
     for (const item of parts) {
       const d = item.definition || defs[item.key];
       if (!d) continue;
@@ -890,12 +939,14 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
       fuel += d.fuel || 0;
       if (d.thrust > 0) { thrust += Math.min(d.thrust, window.BSPParts.MAX_ENGINE_THRUST_KN); ispWeighted += d.isp * d.thrust; }
       if (d.wingArea) { wingArea += d.wingArea; camber += d.camber || 0; }
+      maxFrontalArea = Math.max(maxFrontalArea, Math.max(0.1, d.width * d.depth));
     }
     return {
       body: 'Kerbin', position: [0, bodies.Kerbin.radius + 2, 0], velocity: [0, 0, 0],
       heading: [0, 1, 0], dryMass: Math.max(1, dryMass), fuel, fuelStart: fuel,
       thrustKN: Math.min(thrust, window.BSPParts.MAX_ENGINE_THRUST_KN),
       isp: thrust ? ispWeighted / thrust : 0, wingArea, camber: wingArea ? camber / Math.max(1, parts.filter(p => (p.definition || defs[p.key])?.wingArea).length) : 0,
+      dragArea: Math.max(0.8, maxFrontalArea * 0.62) + wingArea * 0.035, dragCoefficient: 0.52,
       engineActive: false, throttle: 0, sas: true, rcs: false, landed: true, stage: 0,
       pitch: 0, yaw: 0, roll: 0, heat: 0, parachute: false, gear: true,
       apoapsis: 0, periapsis: 0, flightTime: 0, missionName: 'BSP-01'
@@ -920,7 +971,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
     if (v.landed && !v.engineActive && !(controls.steerPitch || controls.steerYaw)) return;
     const throttle = clamp(controls.throttle ?? v.throttle, 0, 1);
     const pitchInput = controls.pitch || 0, yawInput = controls.yaw || 0, rollInput = controls.roll || 0;
-    const steps = Math.max(1, Math.min(24, Math.ceil(dt / 0.035)));
+    const steps = Math.max(1, Math.min(60, Math.ceil(dt / 0.0125)));
     const h = dt / steps;
 
     for (let i = 0; i < steps; i++) {
@@ -946,16 +997,23 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 
       const speed = len(v.velocity);
       const rho = atmosphereDensity(body, altitude);
-      const cdArea = v.wingArea > 0 ? Math.max(0.25, v.wingArea * 0.08) : 0.8;
-      let aero = [0, 0, 0];
+      const cdArea = Math.max(0.35, (v.dragArea || 1.2) * (v.dragCoefficient || 0.52));
+      let aero = [0, 0, 0], dragAcceleration = 0, liftAcceleration = 0;
       if (rho > 0 && speed > 0.1) {
         const dragMagnitude = 0.5 * rho * speed * speed * cdArea / Math.max(1, v.dryMass + v.fuel);
+        dragAcceleration = dragMagnitude;
         aero = add(aero, mul(norm(v.velocity), -dragMagnitude));
         if (v.wingArea > 0) {
-          const liftDirection = norm(sub(radial, mul(norm(v.velocity), dot(radial, norm(v.velocity)))));
-          const cl = clamp(0.18 + (v.camber || 0) * 0.035 + Math.abs(v.pitch) * 0.08, -0.2, 1.4);
-          const liftMagnitude = 0.5 * rho * speed * speed * v.wingArea * cl / Math.max(1, v.dryMass + v.fuel);
-          aero = add(aero, mul(liftDirection, liftMagnitude));
+          const flow = norm(v.velocity);
+          const bodyUp = sub(v.heading, mul(flow, dot(v.heading, flow)));
+          if (len(bodyUp) > 0.02) {
+            const liftDirection = norm(bodyUp);
+            const alpha = Math.asin(clamp(dot(norm(v.heading), norm(sub(radial, mul(flow, dot(radial, flow))))), -1, 1));
+            const cl = clamp((v.camber || 0) * 0.025 + alpha * 2.4, -0.65, 1.45);
+            const liftMagnitude = 0.5 * rho * speed * speed * v.wingArea * cl / Math.max(1, v.dryMass + v.fuel);
+            liftAcceleration = liftMagnitude;
+            aero = add(aero, mul(liftDirection, liftMagnitude));
+          }
         }
       }
 
@@ -975,6 +1033,11 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
       const newAltitude = len(v.position) - body.radius;
       v.flightTime += h;
       v.heat = Math.max(0, v.heat + (rho > 0 ? Math.pow(speed / 7000, 2) * rho * h * 0.015 : -h * 0.02));
+      v.gravityNow = len(g);
+      v.airDensityNow = rho;
+      v.dragAccelerationNow = dragAcceleration;
+      v.liftAccelerationNow = liftAcceleration;
+      v.dynamicPressureNow = 0.5 * rho * speed * speed;
       if (newAltitude <= 0) {
         const rHat = norm(v.position);
         v.position = mul(rHat, body.radius + 0.8);
@@ -1663,7 +1726,8 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   let campaign = { rival: enemyNames[Math.floor(Math.random() * enemyNames.length)], rivalProgress: 12, playerProgress: 0, target: 'Duna', accepted: false, wins: 0 };
   let warpIndex = 0, paused = false, missionStart = 0, lastFrame = 0, fpsFrames = 0, fpsTimer = 0;
   let time = 0, keys = new Set(), currentAgency = 'Bob Space Program', povMode = 'bsp';
-  let selectedDestination = 'Duna', maneuverNode = null, mapScaleLog = true;
+  let selectedDestination = 'Duna', maneuverNode = null, mapScaleLog = true, mapViewMode = 'system';
+  let volumetricPlume = false, twrLimiter = true, gravityTurnAssist = true, threeFlightInit = null, threeFlightError = '';
   let undoStack = [], redoStack = [], lastEditorSave = '', customWarnings = false;
   let multiplayer = { active: false, mode: 'same', playerId: 'pilot-' + Math.random().toString(36).slice(2, 8), room: '', timer: null, server: '' };
   let flagData = { name: 'Bob Space Program', color1: '#184d78', color2: '#f0e6c8', color3: '#d7a940', pattern: 'horizontal', emblem: 'B', emblemText: 'BSP', emblemScale: 150, imageData: null };
@@ -1884,6 +1948,9 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
     vessel.parts = editor.parts.map(item => ({ ...item, position: item.position.slice(), rotation: item.rotation.slice(), definition: item.definition ? P.clone(item.definition) : null }));
     vessel.landed = true;
     vessel.throttle = Number($('throttleRange').value) / 100;
+    const fullThrottleTwr = vessel.thrustKN * 1000 / (Math.max(1, vessel.dryMass + vessel.fuel) * currentGravity(vessel));
+    if (twrLimiter && fullThrottleTwr > 2.2) vessel.throttle = Math.min(vessel.throttle, 2.2 / fullThrottleTwr);
+    $('throttleRange').value = vessel.throttle * 100;
     vessel.stage = 0;
     vessel.engineActive = false;
     missionStart = time;
@@ -1893,7 +1960,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
     $('gearFlightBtn').textContent = 'GEAR: DOWN';
     $('panelsFlightBtn').textContent = 'PANELS: RETRACTED';
     setView('flight');
-    log('VESSEL READY — PRESS SPACE OR STAGE TO IGNITE');
+    log(twrLimiter && fullThrottleTwr > 2.2 ? 'AUTO TWR LIMIT SET START THRUST TO 2.2 G — RAISE THROTTLE MANUALLY OR DISABLE THE LIMIT' : 'VESSEL READY — PRESS SPACE OR STAGE TO IGNITE');
     updateFlightHud();
   }
 
@@ -1930,7 +1997,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
     if (!vessel.engineActive) {
       vessel.engineActive = true;
       vessel.landed = false;
-      vessel.throttle = Math.max(0.1, vessel.throttle || 1);
+      setFlightThrottle(vessel.throttle || 1, false);
       $('stageBtn').textContent = 'NEXT STAGE / SPACE';
       log('ENGINE IGNITION — LIFTOFF');
       return;
@@ -1947,6 +2014,39 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   function altitude(v) { return Math.max(0, V.len(v.position) - V.bodies[v.body].radius); }
   function currentGravity(v) { const b = V.bodies[v.body]; const r = V.len(v.position); return V.mu(b) / Math.max(1, r * r); }
 
+  function setFlightThrottle(requested, refresh = true) {
+    if (!vessel) return;
+    let next = clamp(requested, 0, 1);
+    if (twrLimiter && vessel.thrustKN > 0) {
+      const fullPowerTwr = vessel.thrustKN * 1000 / (Math.max(1, vessel.dryMass + vessel.fuel) * currentGravity(vessel));
+      if (fullPowerTwr > 2.2) next = Math.min(next, 2.2 / fullPowerTwr);
+    }
+    vessel.throttle = next;
+    $('throttleRange').value = next * 100;
+    if (refresh) updateFlightHud();
+  }
+
+  function applyGravityTurnAssist(dt) {
+    if (!gravityTurnAssist || !vessel || !vessel.engineActive || vessel.wingArea > 0) return;
+    const radial = V.norm(vessel.position);
+    const radialSpeed = V.dot(vessel.velocity, radial);
+    let tangent = V.sub(vessel.velocity, V.mul(radial, radialSpeed));
+    if (V.len(tangent) < 5) tangent = [0, 0, 1];
+    else tangent = V.norm(tangent);
+    const alt = altitude(vessel);
+    let pitchAboveHorizon;
+    if (alt < 250) pitchAboveHorizon = 89 * Math.PI / 180;
+    else if (alt < 15000) pitchAboveHorizon = (89 - 34 * (alt - 250) / 14750) * Math.PI / 180;
+    else if (alt < 45000) pitchAboveHorizon = (55 - 47 * (alt - 15000) / 30000) * Math.PI / 180;
+    else pitchAboveHorizon = 8 * Math.PI / 180;
+    const target = V.norm(V.add(V.mul(radial, Math.sin(pitchAboveHorizon)), V.mul(tangent, Math.cos(pitchAboveHorizon))));
+    const current = V.norm(vessel.heading);
+    const angle = Math.acos(clamp(V.dot(current, target), -1, 1));
+    if (angle < 1e-5) return;
+    const fraction = Math.min(1, (3.5 * Math.PI / 180 * dt) / angle);
+    vessel.heading = V.norm(V.add(V.mul(current, 1 - fraction), V.mul(target, fraction)));
+  }
+
   function updateFlightHud() {
     if (!vessel) return;
     const alt = altitude(vessel), speed = V.len(vessel.velocity), mass = vessel.dryMass + vessel.fuel;
@@ -1958,9 +2058,19 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
     $('flightApo').textContent = 'AP ' + (Number.isFinite(vessel.apoapsis) ? V.formatDistance(vessel.apoapsis) : 'ESCAPE');
     const atmosphere = V.bodies[vessel.body].atmosphere;
     $('flightAtmosphere').textContent = atmosphere ? 'ATM ' + Math.round(clamp(1 - alt / atmosphere.height, 0, 1) * 100) + '%' : 'NO ATM';
+    $('gravityReadout').textContent = 'g ' + (vessel.gravityNow || currentGravity(vessel)).toFixed(2) + ' m/s²';
+    $('dragReadout').textContent = 'ρ ' + (vessel.airDensityNow ?? V.atmosphereDensity(V.bodies[vessel.body], alt)).toFixed(4) + ' • D ' + (vessel.dragAccelerationNow || 0).toFixed(2) + ' m/s²';
+    const hasAir = (vessel.airDensityNow ?? V.atmosphereDensity(V.bodies[vessel.body], alt)) > 0.00001;
+    $('flightForceReadout').textContent = vessel.engineActive && vessel.fuel > 0 ? 'ENGINE: FIRING' : (!vessel.landed ? (hasAir ? 'COAST: GRAVITY + DRAG' : 'COAST: GRAVITY ONLY') : (vessel.fuel > 0 ? 'ENGINE: READY' : 'ENGINE: OUT OF FUEL'));
+    $('volumetricPlumeBtn').textContent = 'VOLUMETRIC PLUME: ' + (volumetricPlume ? 'ON' : 'OFF');
+    $('volumetricPlumeBtn').classList.toggle('active', volumetricPlume);
     $('throttleValue').textContent = Math.round(vessel.throttle * 100) + '%';
     $('thrustValue').textContent = Math.round(thrust).toLocaleString() + ' kN';
     $('twrValue').textContent = twr.toFixed(2);
+    $('twrLimitBtn').textContent = 'AUTO TWR LIMIT: ' + (twrLimiter ? 'ON' : 'OFF');
+    $('twrLimitBtn').classList.toggle('active', twrLimiter);
+    $('gravityTurnBtn').textContent = 'GRAVITY TURN ASSIST: ' + (gravityTurnAssist ? 'ON' : 'OFF');
+    $('gravityTurnBtn').classList.toggle('active', gravityTurnAssist);
     $('fuelValue').textContent = Math.round(vessel.fuel).toLocaleString() + ' kg';
     $('throttleRange').value = vessel.throttle * 100;
     $('sasBtn').textContent = 'SAS: ' + (vessel.sas ? 'ON' : 'OFF');
@@ -1988,6 +2098,25 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
     let seed = 73421;
     const rand = () => { seed = (seed * 16807) % 2147483647; return (seed - 1) / 2147483646; };
     stars = Array.from({ length: 120 }, () => ({ x: rand(), y: rand(), r: rand() * 1.35 + 0.25, a: rand() * 0.65 + 0.2 }));
+  }
+
+  function seededTerrainHeight(x, z, bodyName) {
+    if (Math.hypot(x, z) < 250) return 0;
+    let seed = 41827;
+    for (let i = 0; i < bodyName.length; i++) seed = Math.imul(seed ^ bodyName.charCodeAt(i), 16777619);
+    const hash = (ix, iz, salt) => {
+      let n = Math.imul(ix ^ (seed + salt), 374761393) + Math.imul(iz, 668265263);
+      n = Math.imul(n ^ (n >>> 13), 1274126177);
+      return ((n ^ (n >>> 16)) >>> 0) / 4294967295;
+    };
+    const noise = (px, pz, salt) => {
+      const ix = Math.floor(px), iz = Math.floor(pz), fx = px - ix, fz = pz - iz;
+      const sx = fx * fx * (3 - 2 * fx), sz = fz * fz * (3 - 2 * fz);
+      const a = hash(ix, iz, salt), b = hash(ix + 1, iz, salt), c = hash(ix, iz + 1, salt), d = hash(ix + 1, iz + 1, salt);
+      const top = a + (b - a) * sx, bottom = c + (d - c) * sx;
+      return top + (bottom - top) * sz;
+    };
+    return (noise(x / 2100, z / 2100, 0) - 0.5) * 160 + (noise(x / 470, z / 470, 0x7f4a7c15) - 0.5) * 34 + (noise(x / 95, z / 95, 0x51ed270b) - 0.5) * 5;
   }
 
   function resizeCanvas(canvas) {
@@ -2159,7 +2288,20 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 
   function drawFlightView() {
     if (!vessel || $('flightShell').hidden) return;
-    const canvas = $('flightCanvas'), ctx = canvas.getContext('2d');
+    const canvas = $('flightCanvas');
+    if (window.BSPThreeFlight && window.BSPThreeFlight.available) {
+      try {
+        window.BSPThreeFlight.init(canvas);
+        window.BSPThreeFlight.setVolumetric(volumetricPlume);
+        window.BSPThreeFlight.update(vessel, editor);
+        $('fpsReadout').textContent = 'THREE.JS / WEBGL';
+        return;
+      } catch (error) {
+        threeFlightError = String(error && error.message || error);
+        console.warn('BSP Three.js renderer failed; using canvas fallback.', error);
+      }
+    }
+    const ctx = canvas.getContext('2d');
     const { w, h } = resizeCanvas(canvas);
     const body = V.bodies[vessel.body] || V.bodies.Kerbin;
     const radius = body.radius;
@@ -2222,7 +2364,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
         const z = range * zIndex / rows;
         for (let xIndex = 0; xIndex <= columns; xIndex++) {
           const x = (xIndex / columns - 0.5) * range * 1.35;
-          const texture = Math.sin(x * 0.0017 + z * 0.00043) * 13 + Math.cos(z * 0.00115 - x * 0.00062) * 9 + Math.sin((x + z) * 0.00019) * 23;
+          const texture = seededTerrainHeight(x, z, body.name);
           const curvature = (x * x + z * z) / (2 * radius);
           const terrainHeight = texture - curvature;
           const point = V.add(V.mul(radial, radius + terrainHeight), V.add(V.mul(shipRight, x), V.mul(tangentForward, z)));
@@ -2355,14 +2497,14 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
     if (vessel.engineActive && vessel.throttle > 0 && vessel.fuel > 0) {
       for (const { item, def } of validParts.filter(entry => entry.def.thrust > 0)) {
         const nozzle = toWorld([item.position[0], item.position[1] - bottom - def.height * 0.48, item.position[2]]);
-        const plumeLength = 7 + vessel.throttle * 17;
-        const width = Math.max(0.35, Math.min(def.width * 0.24, 1.7));
+        const plumeLength = (volumetricPlume ? 18 : 7) + vessel.throttle * (volumetricPlume ? 42 : 17);
+        const width = Math.max(0.35, Math.min(def.width * (volumetricPlume ? 0.4 : 0.24), volumetricPlume ? 2.4 : 1.7));
         const baseA = project(V.add(nozzle, V.mul(shipRight, -width)));
         const baseB = project(V.add(nozzle, V.mul(shipRight, width)));
         const tip = project(V.sub(nozzle, V.mul(shipUp, plumeLength)));
         if (!baseA || !baseB || !tip) continue;
         const flame = ctx.createLinearGradient((baseA.x + baseB.x) / 2, (baseA.y + baseB.y) / 2, tip.x, tip.y);
-        flame.addColorStop(0, 'rgba(255,255,215,.96)'); flame.addColorStop(0.2, 'rgba(255,190,75,.92)'); flame.addColorStop(0.65, 'rgba(255,94,31,.66)'); flame.addColorStop(1, 'rgba(255,80,30,0)');
+        flame.addColorStop(0, 'rgba(255,255,215,.96)'); flame.addColorStop(0.2, 'rgba(255,190,75,.92)'); flame.addColorStop(0.65, volumetricPlume ? 'rgba(255,94,31,.42)' : 'rgba(255,94,31,.66)'); flame.addColorStop(1, 'rgba(255,80,30,0)');
         ctx.fillStyle = flame; ctx.beginPath(); ctx.moveTo(baseA.x, baseA.y); ctx.lineTo(tip.x, tip.y); ctx.lineTo(baseB.x, baseB.y); ctx.closePath(); ctx.fill();
       }
     }
@@ -2411,8 +2553,96 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
     return { x: w / 2 + Math.cos(angle) * r, y: h / 2 + Math.sin(angle) * r * 0.78, r, au };
   }
 
+  function getOrbitFrame() {
+    if (!vessel) return null;
+    const body = V.bodies[vessel.body] || V.bodies.Kerbin;
+    const r = vessel.position, velocity = vessel.velocity, radius = V.len(r), speed2 = V.dot(velocity, velocity);
+    const h = V.cross(r, velocity), hLength = V.len(h);
+    if (hLength < 1 || radius < 1) return null;
+    const mu = V.mu(body), hHat = V.mul(h, 1 / hLength), rHat = V.mul(r, 1 / radius);
+    const eccentricityVector = V.sub(V.mul(V.cross(velocity, h), 1 / mu), rHat);
+    const eccentricity = V.len(eccentricityVector);
+    const energy = speed2 / 2 - mu / radius;
+    if (energy >= 0) return { body, hHat, pHat: eccentricity > 1e-6 ? V.norm(eccentricityVector) : rHat, qHat: null, eccentricity, semiMajor: Infinity, escape: true };
+    const semiMajor = -mu / (2 * energy);
+    const pHat = eccentricity > 1e-6 ? V.norm(eccentricityVector) : rHat;
+    const qHat = V.norm(V.cross(hHat, pHat));
+    return { body, hHat, pHat, qHat, eccentricity, semiMajor, semiLatus: hLength * hLength / mu, periapsis: semiMajor * (1 - eccentricity), apoapsis: semiMajor * (1 + eccentricity), escape: false };
+  }
+
+  function nodePreviewPosition() {
+    if (!vessel || !maneuverNode) return null;
+    const dt = clamp(maneuverNode.timeOffset || 0, 0, 3600);
+    const body = V.bodies[vessel.body] || V.bodies.Kerbin;
+    const radius = V.len(vessel.position);
+    const gravity = V.mul(V.norm(vessel.position), -V.mu(body) / (radius * radius));
+    return V.add(V.add(vessel.position, V.mul(vessel.velocity, dt)), V.mul(gravity, 0.5 * dt * dt));
+  }
+
+  function drawOrbitMap() {
+    if (!vessel) return;
+    const canvas = $('mapCanvas'), ctx = canvas.getContext('2d');
+    const { w, h } = resizeCanvas(canvas);
+    const frame = getOrbitFrame();
+    ctx.fillStyle = '#070f19'; ctx.fillRect(0, 0, w, h);
+    const cx = w * 0.5, cy = h * 0.51;
+    ctx.strokeStyle = 'rgba(159,185,199,.13)'; ctx.lineWidth = 1;
+    for (let i = 1; i <= 5; i++) { ctx.beginPath(); ctx.arc(cx, cy, Math.min(w, h) * i * 0.075, 0, Math.PI * 2); ctx.stroke(); }
+    ctx.beginPath(); ctx.moveTo(cx, 0); ctx.lineTo(cx, h); ctx.moveTo(0, cy); ctx.lineTo(w, cy); ctx.stroke();
+    const body = V.bodies[vessel.body] || V.bodies.Kerbin;
+    const rNow = V.len(vessel.position);
+    const orbitMax = frame && !frame.escape ? frame.apoapsis : rNow * 3.2;
+    const viewRadius = Math.max(body.radius * 2.2, Math.min(orbitMax * 1.15, rNow * 8));
+    const scale = Math.min(w, h) * 0.43 / viewRadius;
+    const bodyRadius = Math.max(5, body.radius * scale);
+    ctx.fillStyle = body.color; ctx.beginPath(); ctx.arc(cx, cy, bodyRadius, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = 'rgba(231,240,244,.55)'; ctx.lineWidth = 1; ctx.stroke();
+    if (body.atmosphere) {
+      ctx.strokeStyle = 'rgba(101,178,228,.48)'; ctx.lineWidth = Math.max(2, body.atmosphere.height * scale * 2);
+      ctx.beginPath(); ctx.arc(cx, cy, bodyRadius + body.atmosphere.height * scale, 0, Math.PI * 2); ctx.stroke();
+    }
+    ctx.fillStyle = '#eff5f7'; ctx.font = '11px monospace'; ctx.textAlign = 'center';
+    ctx.fillText(body.name.toUpperCase(), cx, cy + bodyRadius + 18);
+    if (frame && !frame.escape && frame.qHat) {
+      const points = [];
+      for (let i = 0; i <= 180; i++) {
+        const anomaly = i / 180 * Math.PI * 2;
+        const r = frame.semiLatus / (1 + frame.eccentricity * Math.cos(anomaly));
+        points.push({ x: cx + r * Math.cos(anomaly) * scale, y: cy - r * Math.sin(anomaly) * scale });
+      }
+      ctx.strokeStyle = '#e2b85c'; ctx.lineWidth = 2; ctx.beginPath();
+      points.forEach((p, i) => { if (!i) ctx.moveTo(p.x, p.y); else ctx.lineTo(p.x, p.y); }); ctx.stroke();
+      ctx.setLineDash([5, 5]); ctx.strokeStyle = 'rgba(227,184,92,.38)'; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(cx + frame.pHat[0] * frame.semiMajor * frame.eccentricity * scale, cy - frame.pHat[2] * frame.semiMajor * frame.eccentricity * scale); ctx.stroke(); ctx.setLineDash([]);
+    } else if (frame && frame.escape) {
+      ctx.strokeStyle = '#e2b85c'; ctx.lineWidth = 2; ctx.setLineDash([7, 4]);
+      ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(cx + w * 0.43, cy - h * 0.25); ctx.stroke(); ctx.setLineDash([]);
+    }
+    const px = frame && frame.pHat ? V.dot(vessel.position, frame.pHat) : vessel.position[0];
+    const py = frame && frame.qHat ? V.dot(vessel.position, frame.qHat) : vessel.position[2];
+    const craftX = cx + px * scale, craftY = cy - py * scale;
+    ctx.fillStyle = '#f7f3dc'; ctx.strokeStyle = '#182c3b'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(craftX, craftY, 6, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#eaf0f3'; ctx.textAlign = 'left'; ctx.fillText('BSP VESSEL', craftX + 10, craftY - 7);
+    if (maneuverNode) {
+      const predicted = nodePreviewPosition();
+      if (predicted) {
+        const nx = frame && frame.pHat ? V.dot(predicted, frame.pHat) : predicted[0];
+        const ny = frame && frame.qHat ? V.dot(predicted, frame.qHat) : predicted[2];
+        const nodeX = cx + nx * scale, nodeY = cy - ny * scale;
+        ctx.strokeStyle = '#f1d36b'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(craftX, craftY); ctx.lineTo(nodeX, nodeY); ctx.stroke();
+        ctx.fillStyle = '#f5d36b'; ctx.beginPath(); ctx.moveTo(nodeX, nodeY - 9); ctx.lineTo(nodeX + 8, nodeY); ctx.lineTo(nodeX, nodeY + 9); ctx.lineTo(nodeX - 8, nodeY); ctx.closePath(); ctx.fill();
+      }
+    }
+    ctx.fillStyle = '#e5edf1'; ctx.font = '11px monospace'; ctx.textAlign = 'left';
+    ctx.fillText(body.name.toUpperCase() + ' ORBITAL VIEW', 15, 22);
+    ctx.fillText('ALT ' + V.formatDistance(altitude(vessel)) + '  SPEED ' + V.len(vessel.velocity).toFixed(1) + ' m/s', 15, 40);
+    ctx.fillText(frame && frame.escape ? 'TRAJECTORY: ESCAPE' : frame ? 'AP ' + V.formatDistance(Math.max(0, frame.apoapsis - body.radius)) + '   PE ' + V.formatDistance(Math.max(0, frame.periapsis - body.radius)) : 'NO STABLE ORBIT SOLUTION', 15, 58);
+  }
+
   function drawMap() {
     if ($('mapShell').hidden) return;
+    if (mapViewMode === 'orbit') { drawOrbitMap(); return; }
     const canvas = $('mapCanvas'), ctx = canvas.getContext('2d');
     const { w, h } = resizeCanvas(canvas);
     ctx.fillStyle = '#07101d'; ctx.fillRect(0, 0, w, h);
@@ -2452,11 +2682,17 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
       ctx.strokeStyle = '#fff3a0'; ctx.setLineDash([4, 4]); ctx.beginPath(); ctx.moveTo(kp.x + 12, kp.y - 12); ctx.lineTo(kp.x + 70, kp.y - 42); ctx.stroke(); ctx.setLineDash([]);
       ctx.fillStyle = '#fff3a0'; ctx.beginPath(); ctx.arc(kp.x + 70, kp.y - 42, 5, 0, Math.PI * 2); ctx.fill();
     }
-    $('mapReadout').textContent = (mapScaleLog ? 'LOG-COMPRESSED DISPLAY' : 'TRUE SEMI-MAJOR AXIS SCALE') + ' • PHYSICAL DATA IN SI UNITS';
+    $('mapReadout').textContent = (mapScaleLog ? 'LOG-COMPRESSED DISPLAY' : 'TRUE SEMI-MAJOR AXIS SCALE') + ' • PHYSICAL DATA IN SI UNITS' + (maneuverNode ? ' • NODE T-' + Math.ceil(maneuverNode.timeOffset || 0) + 's ΔV ' + Math.round(Math.hypot(maneuverNode.dvPrograde || 0, maneuverNode.dvNormal || 0, maneuverNode.dvRadial || 0)) + ' m/s' : '');
   }
 
   function mapClick(e) {
     const canvas = $('mapCanvas'), rect = canvas.getBoundingClientRect();
+    if (mapViewMode === 'orbit') {
+      if (!vessel) return;
+      maneuverNode = { timeOffset: 120, dvPrograde: 150, dvNormal: 0, dvRadial: 0, body: vessel.body };
+      updateManeuverEditor(); drawMap(); log('ORBIT MANEUVER NODE CREATED');
+      return;
+    }
     const x = (e.clientX - rect.left) * canvas.width / rect.width;
     const y = (e.clientY - rect.top) * canvas.height / rect.height;
     const scale = Math.min(canvas.width, canvas.height) * 0.46;
@@ -2472,9 +2708,10 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
       $('mapReadout').textContent = 'TARGET SELECTED: ' + nearest.toUpperCase() + ' — ' + V.formatDistance(V.bodies[nearest].radius) + ' RADIUS';
       drawMap();
       log('TARGET SELECTED: ' + nearest.toUpperCase());
-    } else if (vessel && vessel.body === 'Kerbin') {
-      maneuverNode = { time: time + 120, dv: 150, body: 'Kerbin' };
-      drawMap(); log('MANEUVER NODE CREATED — ΔV 150 m/s PROGRADE');
+    } else if (vessel) {
+      maneuverNode = { timeOffset: 120, dvPrograde: 150, dvNormal: 0, dvRadial: 0, body: vessel.body };
+      updateManeuverEditor();
+      drawMap(); log('MANEUVER NODE CREATED — EDIT THE BURN VECTOR BELOW');
     }
   }
 
@@ -2714,9 +2951,39 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 
   function executeManeuver() {
     if (!vessel || !maneuverNode) { log('NO MANEUVER NODE TO EXECUTE'); return; }
+    if ((maneuverNode.timeOffset || 0) > 0.5) {
+      maneuverNode.armed = true;
+      log('MANEUVER ARMED — BURN IN ' + Math.ceil(maneuverNode.timeOffset) + ' SECONDS');
+      updateManeuverEditor();
+      return;
+    }
+    applyManeuverBurn();
+  }
+
+  function applyManeuverBurn() {
+    if (!vessel || !maneuverNode) return;
     const prograde = V.norm(vessel.velocity);
-    vessel.velocity = V.add(vessel.velocity, V.mul(prograde, maneuverNode.dv));
-    maneuverNode = null; drawMap(); log('MANEUVER EXECUTED — VELOCITY UPDATED');
+    const radial = V.norm(vessel.position);
+    const normal = V.norm(V.cross(vessel.position, vessel.velocity));
+    const deltaV = V.add(V.add(V.mul(prograde, maneuverNode.dvPrograde || 0), V.mul(normal, maneuverNode.dvNormal || 0)), V.mul(radial, maneuverNode.dvRadial || 0));
+    vessel.velocity = V.add(vessel.velocity, deltaV);
+    maneuverNode = null; updateManeuverEditor(); drawMap(); log('MANEUVER EXECUTED — ΔV VECTOR APPLIED');
+  }
+
+  function updateManeuverEditor() {
+    const editorPanel = $('maneuverEditor');
+    if (!editorPanel) return;
+    editorPanel.hidden = !maneuverNode;
+    if (!maneuverNode) { $('executeNodeBtn').textContent = 'ARM / EXECUTE NODE'; return; }
+    for (const [key, id, suffix] of [['dvPrograde','nodePrograde',' m/s'],['dvNormal','nodeNormal',' m/s'],['dvRadial','nodeRadial',' m/s'],['timeOffset','nodeTime',' s']]) {
+      const input = $(id), output = $(id + 'Out');
+      if (input) input.value = maneuverNode[key] ?? 0;
+      if (output) {
+        const value = Number(maneuverNode[key] || 0);
+        output.textContent = (key !== 'timeOffset' && value > 0 ? '+' : '') + value + suffix;
+      }
+    }
+    $('executeNodeBtn').textContent = maneuverNode.armed ? 'NODE ARMED' : 'ARM / EXECUTE NODE';
   }
 
   function stepWarp(direction) {
@@ -2738,14 +3005,20 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
       const warp = warpRates[warpIndex];
       // Keep integration stable on low-power hardware; in atmosphere the UI caps warp.
       const simDt = Math.min(0.5, frameDt * warp);
+      applyGravityTurnAssist(simDt);
       V.stepVessel(vessel, simDt, {
         throttle: vessel.throttle,
         pitch: keys.has('w') ? 1 : keys.has('s') ? -1 : 0,
         yaw: keys.has('d') ? 1 : keys.has('a') ? -1 : 0,
         roll: keys.has('e') ? 1 : keys.has('q') ? -1 : 0
       });
-      if (keys.has('shift')) vessel.throttle = clamp(vessel.throttle + frameDt * 0.5, 0, 1);
-      if (keys.has('control')) vessel.throttle = clamp(vessel.throttle - frameDt * 0.5, 0, 1);
+      if (maneuverNode && maneuverNode.armed) {
+        maneuverNode.timeOffset = Math.max(0, (maneuverNode.timeOffset || 0) - simDt);
+        $('nodeTimeOut').textContent = 'T-' + Math.ceil(maneuverNode.timeOffset) + ' s';
+        if (maneuverNode.timeOffset <= 0.25) applyManeuverBurn();
+      }
+      if (keys.has('shift')) setFlightThrottle(vessel.throttle + frameDt * 0.5, false);
+      if (keys.has('control')) setFlightThrottle(vessel.throttle - frameDt * 0.5, false);
       if (V.len(vessel.position) - V.bodies[vessel.body].radius > V.bodies[vessel.body].atmosphere?.height + 12000) warpIndex = Math.min(warpIndex, 5);
       drawFlightView(); updateFlightHud();
     }
@@ -2776,8 +3049,8 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
       if (key === 'q' || key === 'e') editor.rotateSelected(1, key === 'q' ? -Math.PI / 2 : Math.PI / 2);
     } else if (currentView === 'flight') {
       if (key === ' ') { handleStage(); e.preventDefault(); }
-      if (key === 'z') vessel.throttle = 1;
-      if (key === 'x') vessel.throttle = 0;
+      if (key === 'z') setFlightThrottle(1);
+      if (key === 'x') setFlightThrottle(0);
       if (key === 't') { vessel.sas = !vessel.sas; updateFlightHud(); }
       if (key === 'r') { vessel.rcs = !vessel.rcs; updateFlightHud(); }
       if (key === 'm') toggleMap();
@@ -2868,14 +3141,48 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
     on('launchToMapBtn', 'click', () => { flightViewBeforeMap = 'flight'; setView('map'); });
     on('mapReturnBtn', 'click', () => setView(flightViewBeforeMap || 'flight'));
     on('scaleToggle', 'click', () => { mapScaleLog = !mapScaleLog; $('scaleToggle').textContent = mapScaleLog ? 'LOG MAP' : 'TRUE SCALE'; drawMap(); });
+    on('mapModeToggle', 'click', () => {
+      mapViewMode = mapViewMode === 'system' ? 'orbit' : 'system';
+      $('mapModeToggle').textContent = mapViewMode === 'system' ? 'ORBIT VIEW' : 'SYSTEM VIEW';
+      drawMap();
+    });
     on('mapCanvas', 'click', mapClick);
-    on('addNodeBtn', 'click', () => { if (vessel) { maneuverNode = { time: time + 120, dv: 150, body: vessel.body }; drawMap(); log('MANEUVER NODE CREATED — 150 m/s PROGRADE'); } });
+    on('addNodeBtn', 'click', () => {
+      if (!vessel) return;
+      maneuverNode = { timeOffset: 120, dvPrograde: 150, dvNormal: 0, dvRadial: 0, body: vessel.body };
+      updateManeuverEditor(); drawMap(); log('MANEUVER NODE CREATED — EDIT THE BURN VECTOR BELOW');
+    });
     on('executeNodeBtn', 'click', executeManeuver);
+    on('deleteNodeBtn', 'click', () => { maneuverNode = null; updateManeuverEditor(); drawMap(); log('MANEUVER NODE DELETED'); });
+    for (const [inputId, property] of [['nodePrograde','dvPrograde'],['nodeNormal','dvNormal'],['nodeRadial','dvRadial'],['nodeTime','timeOffset']]) on(inputId, 'input', event => {
+      if (!maneuverNode) return;
+      maneuverNode[property] = Number(event.target.value);
+      updateManeuverEditor();
+      drawMap();
+    });
     on('deployBeaconBtn', 'click', deployBeacon);
     on('stageBtn', 'click', handleStage);
+    on('twrLimitBtn', 'click', () => {
+      twrLimiter = !twrLimiter;
+      if (vessel && twrLimiter) setFlightThrottle(vessel.throttle, false);
+      updateFlightHud();
+      log('AUTO TWR LIMIT ' + (twrLimiter ? 'ON — MAXIMUM INITIAL THRUST RATIO 2.2' : 'OFF — FULL USER THROTTLE'));
+    });
+    on('gravityTurnBtn', 'click', () => {
+      gravityTurnAssist = !gravityTurnAssist;
+      updateFlightHud();
+      log('GRAVITY TURN ASSIST ' + (gravityTurnAssist ? 'ON — SMOOTHLY PITCHING TOWARD ORBIT' : 'OFF — MANUAL ATTITUDE CONTROL'));
+    });
+    on('volumetricPlumeBtn', 'click', () => {
+      volumetricPlume = !volumetricPlume;
+      if (window.BSPThreeFlight) window.BSPThreeFlight.setVolumetric(volumetricPlume);
+      updateFlightHud();
+      if (currentView === 'flight') drawFlightView();
+      log('VOLUMETRIC PLUME ' + (volumetricPlume ? 'ENABLED' : 'DISABLED') + ' — VISUAL EFFECT ONLY');
+    });
     on('gearFlightBtn', 'click', () => toggleFlightDeployable('gear'));
     on('panelsFlightBtn', 'click', () => toggleFlightDeployable('solar'));
-    on('throttleRange', 'input', e => { if (vessel) vessel.throttle = Number(e.target.value) / 100; });
+    on('throttleRange', 'input', e => { if (vessel) setFlightThrottle(Number(e.target.value) / 100, false); });
     on('sasBtn', 'click', () => { if (vessel) { vessel.sas = !vessel.sas; updateFlightHud(); } });
     on('rcsBtn', 'click', () => { if (vessel) { vessel.rcs = !vessel.rcs; updateFlightHud(); } });
     on('warpDown', 'click', () => stepWarp(-1)); on('warpUp', 'click', () => stepWarp(1));
@@ -2934,6 +3241,432 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   else init();
 })();
 
+</script>
+
+<script type="module">
+/* Optional Three.js flight renderer. The editor and orbital integrator remain
+   dependency-free; Three.js is loaded for the flight scene only. */
+try {
+  const THREE = await import('https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js');
+  const P = window.BSPParts;
+  const V = window.BSPPhysics;
+  const SCALE = 0.001;
+  const terrainSeed = 41827;
+  const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+  const add = (a, b) => [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
+  const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+  const mul = (a, amount) => [a[0] * amount, a[1] * amount, a[2] * amount];
+  const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+  const norm = a => { const length = Math.hypot(...a) || 1; return a.map(value => value / length); };
+
+  function seedFor(text) {
+    let value = terrainSeed;
+    for (let i = 0; i < text.length; i++) value = Math.imul(value ^ text.charCodeAt(i), 16777619);
+    return value >>> 0;
+  }
+  function latticeNoise(x, z, seed) {
+    let n = Math.imul(Math.floor(x) ^ seed, 374761393) + Math.imul(Math.floor(z), 668265263);
+    n = Math.imul(n ^ (n >>> 13), 1274126177);
+    return ((n ^ (n >>> 16)) >>> 0) / 4294967295;
+  }
+  function smoothNoise(x, z, seed) {
+    const ix = Math.floor(x), iz = Math.floor(z), fx = x - ix, fz = z - iz;
+    const sx = fx * fx * (3 - 2 * fx), sz = fz * fz * (3 - 2 * fz);
+    const a = latticeNoise(ix, iz, seed), b = latticeNoise(ix + 1, iz, seed);
+    const c = latticeNoise(ix, iz + 1, seed), d = latticeNoise(ix + 1, iz + 1, seed);
+    const top = a + (b - a) * sx, bottom = c + (d - c) * sx;
+    return top + (bottom - top) * sz;
+  }
+  function terrainHeight(x, z, name) {
+    if (Math.hypot(x, z) < 250) return 0;
+    const seed = seedFor(name);
+    const broad = (smoothNoise(x / 2100, z / 2100, seed) - 0.5) * 160;
+    const medium = (smoothNoise(x / 470, z / 470, seed ^ 0x7f4a7c15) - 0.5) * 34;
+    const fine = (smoothNoise(x / 95, z / 95, seed ^ 0x51ed270b) - 0.5) * 5;
+    return broad + medium + fine;
+  }
+
+  function makePlanetTexture(body, clouds = false) {
+    const canvas = document.createElement('canvas');
+    canvas.width = 512; canvas.height = 256;
+    const ctx = canvas.getContext('2d');
+    const image = ctx.createImageData(canvas.width, canvas.height);
+    const seed = seedFor(body.name);
+    for (let y = 0; y < canvas.height; y++) {
+      const latitude = (0.5 - y / (canvas.height - 1)) * Math.PI;
+      for (let x = 0; x < canvas.width; x++) {
+        const longitude = x / (canvas.width - 1) * Math.PI * 2;
+        const nx = Math.cos(latitude) * Math.cos(longitude), ny = Math.sin(latitude), nz = Math.cos(latitude) * Math.sin(longitude);
+        const broad = smoothNoise(nx * 4.2 + 13, nz * 4.2 + ny * 1.3, seed);
+        const detail = smoothNoise(nx * 12.5 - ny * 2.2, nz * 12.5 + 7, seed ^ 0x7f4a7c15);
+        const fine = smoothNoise(nx * 34 + 3, nz * 34 - ny * 6, seed ^ 0x51ed270b);
+        const land = broad * 0.62 + detail * 0.28 + fine * 0.1;
+        const index = (y * canvas.width + x) * 4;
+        let color;
+        if (clouds) {
+          const cloud = smoothNoise(nx * 19 + ny * 7, nz * 19 - 11, seed ^ 0x33a4c2d1);
+          const wisps = smoothNoise(nx * 45, nz * 45 + ny * 8, seed ^ 0x2c1b3c6d);
+          const alpha = clamp((cloud * 0.72 + wisps * 0.28 - 0.58) * 390, 0, 175);
+          image.data[index] = 242; image.data[index + 1] = 246; image.data[index + 2] = 243; image.data[index + 3] = alpha;
+          continue;
+        }
+        if (body.name === 'Kerbin' || body.name === 'Laythe') {
+          if (land > 0.55) color = land > 0.71 ? [112, 133, 83] : [76, 112, 70];
+          else if (land > 0.51) color = [160, 151, 112];
+          else color = [Math.round(24 + detail * 18), Math.round(76 + detail * 45), Math.round(112 + detail * 48)];
+          if (Math.abs(latitude) > 1.22) color = [205, 211, 204];
+        } else if (body.name === 'Duna') {
+          color = land > 0.55 ? [177, 111, 75] : [129, 75, 59];
+        } else if (body.name === 'Eve') {
+          color = land > 0.52 ? [177, 119, 148] : [114, 74, 119];
+        } else if (body.name === 'Jool') {
+          const bands = Math.sin(latitude * 36 + detail * 3.2);
+          color = bands > 0.35 ? [121, 163, 115] : [83, 130, 99];
+        } else {
+          const shade = Math.round(92 + land * 80);
+          color = [shade, Math.max(0, shade - 9), Math.max(0, shade - 19)];
+        }
+        image.data[index] = color[0]; image.data[index + 1] = color[1]; image.data[index + 2] = color[2]; image.data[index + 3] = 255;
+      }
+    }
+    ctx.putImageData(image, 0, 0);
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    texture.anisotropy = 2;
+    return texture;
+  }
+
+  function makeTriangleGeometry(triangles) {
+    const positions = [];
+    for (const triangle of triangles) for (const vertex of triangle) positions.push(vertex[0] * SCALE, vertex[1] * SCALE, vertex[2] * SCALE);
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    geometry.computeVertexNormals();
+    return geometry;
+  }
+
+  class BSPThreeFlight {
+    constructor(canvas) {
+      this.canvas = canvas;
+      this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false, powerPreference: 'low-power' });
+      this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.35));
+      this.renderer.setSize(Math.max(1, canvas.clientWidth), Math.max(1, canvas.clientHeight), false);
+      this.renderer.outputColorSpace = THREE.SRGBColorSpace;
+      this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+      this.scene = new THREE.Scene();
+      this.camera = new THREE.PerspectiveCamera(53, 1, 0.001, 120000);
+      this.camera.position.set(0, 0.025, 0.065);
+      this.cameraTarget = new THREE.Vector3(0, 0.003, 0);
+      this.orbit = { yaw: 0, pitch: 0.18, distance: 0.07 };
+      this.drag = null;
+      this.volumetric = false;
+      this.lastBody = '';
+      this.lastTerrainKey = '';
+      this.partObjects = new Map();
+      this.plumes = [];
+      this.terrainGroup = new THREE.Group();
+      this.planetGroup = new THREE.Group();
+      this.craftGroup = new THREE.Group();
+      this.atmosphereMesh = null;
+      this.planetMesh = null;
+      this.cloudMesh = null;
+      this.terrainMesh = null;
+      this.treeGroup = new THREE.Group();
+      this.starField = this.makeStars();
+      this.scene.add(this.starField, this.planetGroup, this.terrainGroup, this.treeGroup, this.craftGroup);
+      this.scene.add(new THREE.HemisphereLight(0xc6d9ec, 0x4a4035, 1.25));
+      const sunlight = new THREE.DirectionalLight(0xffedcf, 2.1);
+      sunlight.position.set(70, 110, -100);
+      this.scene.add(sunlight);
+      const fill = new THREE.DirectionalLight(0x8fb7d7, 0.55);
+      fill.position.set(-60, 20, 60);
+      this.scene.add(fill);
+      this.bindCamera();
+      this.resizeObserver = new ResizeObserver(() => this.resize());
+      this.resizeObserver.observe(canvas);
+      this.resize();
+    }
+
+    makeStars() {
+      let seed = 39173;
+      const random = () => { seed = (Math.imul(seed, 48271) % 2147483647) >>> 0; return seed / 2147483647; };
+      const positions = [];
+      for (let i = 0; i < 950; i++) {
+        const y = random() * 2 - 1, angle = random() * Math.PI * 2;
+        const radius = 430 + random() * 80, ring = Math.sqrt(1 - y * y);
+        positions.push(Math.cos(angle) * ring * radius, y * radius, Math.sin(angle) * ring * radius);
+      }
+      const geometry = new THREE.BufferGeometry();
+      geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+      return new THREE.Points(geometry, new THREE.PointsMaterial({ color: 0xe7edf2, size: 0.72, sizeAttenuation: false, transparent: true, opacity: 0.8 }));
+    }
+
+    bindCamera() {
+      this.canvas.addEventListener('contextmenu', event => event.preventDefault());
+      this.canvas.addEventListener('pointerdown', event => {
+        if (event.button !== 2 && event.button !== 1) return;
+        this.drag = { x: event.clientX, y: event.clientY, yaw: this.orbit.yaw, pitch: this.orbit.pitch };
+        this.canvas.setPointerCapture(event.pointerId);
+      });
+      this.canvas.addEventListener('pointermove', event => {
+        if (!this.drag) return;
+        const dx = event.clientX - this.drag.x, dy = event.clientY - this.drag.y;
+        this.orbit.yaw = this.drag.yaw - dx * 0.006;
+        this.orbit.pitch = clamp(this.drag.pitch + dy * 0.006, -1.35, 1.35);
+        this.updateCamera();
+      });
+      const stop = () => { this.drag = null; };
+      this.canvas.addEventListener('pointerup', stop);
+      this.canvas.addEventListener('pointercancel', stop);
+      this.canvas.addEventListener('wheel', event => {
+        event.preventDefault();
+        this.orbit.distance = clamp(this.orbit.distance * (event.deltaY > 0 ? 1.12 : 0.89), 0.012, 3.5);
+        this.updateCamera();
+      }, { passive: false });
+    }
+
+    updateCamera() {
+      const pitch = this.orbit.pitch, yaw = this.orbit.yaw, distance = this.orbit.distance;
+      this.camera.position.set(
+        this.cameraTarget.x + Math.sin(yaw) * Math.cos(pitch) * distance,
+        this.cameraTarget.y + Math.sin(pitch) * distance,
+        this.cameraTarget.z + Math.cos(yaw) * Math.cos(pitch) * distance
+      );
+      this.camera.lookAt(this.cameraTarget);
+    }
+
+    resize() {
+      const width = Math.max(1, this.canvas.clientWidth), height = Math.max(1, this.canvas.clientHeight);
+      this.renderer.setSize(width, height, false);
+      this.camera.aspect = width / height;
+      this.camera.updateProjectionMatrix();
+    }
+
+    clearGroup(group) {
+      while (group.children.length) {
+        const child = group.children[group.children.length - 1];
+        group.remove(child);
+        if (child.geometry) child.geometry.dispose();
+        if (Array.isArray(child.material)) child.material.forEach(material => material.dispose());
+        else if (child.material) child.material.dispose();
+      }
+    }
+
+    buildPlanet(body, altitude) {
+      this.clearGroup(this.planetGroup);
+      const radius = body.radius * SCALE;
+      const centerY = -(body.radius + altitude) * SCALE;
+      const planetMaterial = new THREE.MeshStandardMaterial({
+        color: body.type === 'star' ? 0xffffff : 0xffffff,
+        map: body.type === 'star' ? null : makePlanetTexture(body),
+        roughness: 0.92, metalness: 0.02,
+        emissive: body.type === 'star' ? new THREE.Color(body.color) : new THREE.Color(0x000000),
+        emissiveIntensity: body.type === 'star' ? 1.7 : 0
+      });
+      const planet = new THREE.Mesh(new THREE.SphereGeometry(radius, 48, 32), planetMaterial);
+      planet.position.set(0, centerY, 0);
+      this.planetGroup.add(planet);
+      this.planetMesh = planet;
+      if (body.atmosphere && (body.name === 'Kerbin' || body.name === 'Laythe')) {
+        const clouds = new THREE.Mesh(
+          new THREE.SphereGeometry((body.radius + body.atmosphere.height * 0.14) * SCALE, 48, 28),
+          new THREE.MeshStandardMaterial({ map: makePlanetTexture(body, true), color: 0xffffff, transparent: true, opacity: 0.42, depthWrite: false, roughness: 1, side: THREE.DoubleSide })
+        );
+        clouds.position.set(0, centerY, 0);
+        this.planetGroup.add(clouds);
+        this.cloudMesh = clouds;
+      }
+      if (body.atmosphere) {
+        const atmosphere = new THREE.Mesh(
+          new THREE.SphereGeometry((body.radius + body.atmosphere.height) * SCALE, 48, 28),
+          new THREE.MeshBasicMaterial({ color: body.name === 'Duna' ? 0xd68d6e : 0x77b8e6, transparent: true, opacity: 0.075, side: THREE.BackSide, depthWrite: false })
+        );
+        atmosphere.position.set(0, centerY, 0);
+        this.planetGroup.add(atmosphere);
+        this.atmosphereMesh = atmosphere;
+      }
+      this.lastBody = body.name;
+    }
+
+    buildTerrain(body) {
+      this.clearGroup(this.terrainGroup);
+      this.clearGroup(this.treeGroup);
+      const segments = 30, span = 48000, positions = [], indices = [];
+      for (let z = 0; z <= segments; z++) for (let x = 0; x <= segments; x++) {
+        const px = (x / segments - 0.5) * span, pz = (z / segments - 0.5) * span;
+        const height = terrainHeight(px, pz, body.name) - (px * px + pz * pz) / (2 * body.radius);
+        positions.push(px * SCALE, height * SCALE, pz * SCALE);
+        if (x < segments && z < segments) {
+          const a = z * (segments + 1) + x, b = a + 1, c = a + segments + 2, d = a + segments + 1;
+          indices.push(a, d, b, b, d, c);
+        }
+      }
+      const geometry = new THREE.BufferGeometry();
+      geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+      geometry.setIndex(indices);
+      geometry.computeVertexNormals();
+      const terrainColor = body.name === 'Kerbin' ? 0x657b50 : body.name === 'Duna' ? 0x9d6049 : 0x77766c;
+      const material = new THREE.MeshStandardMaterial({ color: terrainColor, roughness: 1, metalness: 0, flatShading: false, side: THREE.DoubleSide });
+      this.terrainMesh = new THREE.Mesh(geometry, material);
+      this.terrainGroup.add(this.terrainMesh);
+      if (body.name === 'Kerbin') this.buildTrees(body);
+      this.lastTerrainKey = body.name + ':' + terrainSeed;
+    }
+
+    buildTrees(body) {
+      let seed = seedFor(body.name + ':tree-line');
+      const random = () => { seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0; return seed / 4294967296; };
+      const trunkGeometry = new THREE.CylinderGeometry(0.0011, 0.0018, 0.014, 5);
+      const canopyGeometry = new THREE.ConeGeometry(0.0058, 0.024, 6);
+      const trunkMaterial = new THREE.MeshStandardMaterial({ color: 0x554438, roughness: 1 });
+      const leafMaterials = [0x395a3c, 0x496b43, 0x58744a].map(color => new THREE.MeshStandardMaterial({ color, roughness: 1 }));
+      for (let i = 0; i < 34; i++) {
+        const x = (random() - 0.5) * 27000, z = 600 + random() * 20500;
+        const y = terrainHeight(x, z, body.name) - (x * x + z * z) / (2 * body.radius);
+        const trunk = new THREE.Mesh(trunkGeometry, trunkMaterial);
+        trunk.position.set(x * SCALE, y * SCALE + 0.007, z * SCALE);
+        const crown = new THREE.Mesh(canopyGeometry, leafMaterials[i % leafMaterials.length]);
+        crown.position.set(x * SCALE, y * SCALE + 0.022, z * SCALE);
+        this.treeGroup.add(trunk, crown);
+      }
+    }
+
+    updateCraft(vessel, editor) {
+      const items = vessel.parts || [];
+      const bottom = items.reduce((minimum, item) => {
+        const def = item.definition || P.byKey[item.key];
+        return def ? Math.min(minimum, item.position[1] - def.height / 2) : minimum;
+      }, 0);
+      const currentIds = new Set(items.map(item => item.id));
+      for (const [id, object] of this.partObjects) {
+        if (!currentIds.has(id)) {
+          this.craftGroup.remove(object.group);
+          object.group.traverse(child => { if (child.geometry) child.geometry.dispose(); if (child.material) child.material.dispose(); });
+          this.partObjects.delete(id);
+        }
+      }
+      this.plumes = [];
+      for (const item of items) {
+        const def = item.definition || P.byKey[item.key];
+        if (!def) continue;
+        let object = this.partObjects.get(item.id);
+        const signature = [item.key, def.width, def.height, def.depth, def.shape, item.deployed, def.color, JSON.stringify(def.profile || null)].join(':');
+        if (!object || object.signature !== signature) {
+          if (object) {
+            this.craftGroup.remove(object.group);
+            object.group.traverse(child => { if (child.geometry) child.geometry.dispose(); if (child.material) child.material.dispose(); });
+          }
+          const group = new THREE.Group();
+          const geometry = makeTriangleGeometry(P.makeGeometry({ ...def, deployed: item.deployed }, 20));
+          const color = new THREE.Color(def.color || '#aeb8bd');
+          const material = new THREE.MeshStandardMaterial({ color, roughness: 0.52, metalness: def.shape === 'engine' ? 0.52 : 0.18 });
+          const mesh = new THREE.Mesh(geometry, material);
+          group.add(mesh);
+          this.craftGroup.add(group);
+          object = { group, signature, def };
+          this.partObjects.set(item.id, object);
+        }
+        object.group.position.set(item.position[0] * SCALE, (item.position[1] - bottom) * SCALE, item.position[2] * SCALE);
+        object.group.rotation.set(item.rotation[0], item.rotation[1], item.rotation[2]);
+        object.group.scale.set(1, 1, 1);
+        if (def.thrust > 0) this.plumes.push({ item, def, group: object.group });
+      }
+      this.craftBottom = bottom;
+    }
+
+    updatePlumes(vessel) {
+      for (const entry of this.plumes) {
+        const old = entry.group.getObjectByName('bsp-engine-plume');
+        if (!vessel.engineActive || vessel.fuel <= 0 || vessel.throttle <= 0) {
+          if (old) { entry.group.remove(old); old.geometry.dispose(); old.material.dispose(); }
+          continue;
+        }
+        const def = entry.def;
+        const length = (this.volumetric ? 48 : 18) * SCALE;
+        const radius = Math.max(0.002, def.width * 0.16 * SCALE);
+        if (old && old.userData.volumetric !== this.volumetric) {
+          entry.group.remove(old); old.geometry.dispose(); old.material.dispose();
+        }
+        const currentPlume = entry.group.getObjectByName('bsp-engine-plume');
+        if (currentPlume) {
+          currentPlume.scale.y = 0.35 + vessel.throttle;
+          if (currentPlume.material.uniforms) {
+            currentPlume.material.uniforms.uPower.value = vessel.throttle;
+            currentPlume.material.uniforms.uTime.value = performance.now() / 1000;
+          } else currentPlume.material.opacity = 0.45 + vessel.throttle * 0.3;
+          continue;
+        }
+        const material = this.volumetric
+          ? new THREE.ShaderMaterial({
+              transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+              uniforms: { uTime: { value: performance.now() / 1000 }, uPower: { value: vessel.throttle } },
+              vertexShader: 'varying vec2 vUv; void main(){ vUv=uv; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0); }',
+              fragmentShader: 'uniform float uTime; uniform float uPower; varying vec2 vUv; void main(){ float edge=1.0-smoothstep(0.02,0.5,abs(vUv.x-0.5)); float tail=1.0-smoothstep(0.0,1.0,vUv.y); float flicker=0.88+0.12*sin(uTime*22.0+vUv.y*38.0); float alpha=edge*tail*flicker*uPower*0.72; vec3 col=mix(vec3(1.0,0.30,0.055),vec3(1.0,0.91,0.62),smoothstep(0.0,0.30,vUv.y)); gl_FragColor=vec4(col,alpha); }'
+            })
+          : new THREE.MeshBasicMaterial({ color: 0xff9a3d, transparent: true, opacity: 0.7, blending: THREE.AdditiveBlending, depthWrite: false });
+        const plume = new THREE.Mesh(new THREE.ConeGeometry(radius, length, this.volumetric ? 12 : 7, 1, true), material);
+        plume.name = 'bsp-engine-plume';
+        plume.userData.volumetric = this.volumetric;
+        plume.rotation.z = Math.PI;
+        plume.position.set(0, -def.height * 0.5 * SCALE - length * 0.48, 0);
+        entry.group.add(plume);
+      }
+    }
+
+    update(vessel, editor) {
+      if (!vessel) return;
+      const body = V.bodies[vessel.body] || V.bodies.Kerbin;
+      const radius = body.radius;
+      const altitude = Math.max(0, Math.hypot(...vessel.position) - radius);
+      const radial = norm(vessel.position);
+      const heading = norm(vessel.heading);
+      const speed = Math.hypot(...vessel.velocity);
+      const velocityTangent = sub(vessel.velocity, mul(radial, dot(vessel.velocity, radial)));
+      const headingTangent = sub(heading, mul(radial, dot(heading, radial)));
+      const tangent = Math.hypot(...velocityTangent) > 0.05 ? norm(velocityTangent) : (Math.hypot(...headingTangent) > 0.05 ? norm(headingTangent) : [0, 0, -1]);
+      const right = norm([tangent[1] * radial[2] - tangent[2] * radial[1], tangent[2] * radial[0] - tangent[0] * radial[2], tangent[0] * radial[1] - tangent[1] * radial[0]]);
+      const localHeading = new THREE.Vector3(dot(heading, right), dot(heading, radial), -dot(heading, tangent)).normalize();
+      this.craftGroup.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), localHeading);
+      this.scene.up.set(0, 1, 0);
+      this.starField.position.set(0, 0, 0);
+      if (this.lastBody !== body.name) this.buildPlanet(body, altitude);
+      else if (this.planetMesh) {
+        const centerY = -(body.radius + altitude) * SCALE;
+        this.planetMesh.position.y = centerY;
+        for (const shell of this.planetGroup.children) if (shell !== this.planetMesh) shell.position.y = centerY;
+      }
+      if (altitude < 42000 && this.lastTerrainKey !== body.name + ':' + terrainSeed) this.buildTerrain(body);
+      this.terrainGroup.position.y = -altitude * SCALE;
+      this.treeGroup.position.y = -altitude * SCALE;
+      this.updateCraft(vessel, editor);
+      this.updatePlumes(vessel);
+      const inAtmosphere = body.atmosphere && altitude < body.atmosphere.height * 1.4;
+      this.scene.background = new THREE.Color(inAtmosphere ? (body.name === 'Duna' ? 0x8b6557 : 0x6592b0) : 0x030812);
+      this.scene.fog = inAtmosphere ? new THREE.Fog(body.name === 'Duna' ? 0xa37b68 : 0x8faebc, 0.18, 18) : null;
+      this.cameraTarget.set(0, Math.max(0.002, Math.min(0.016, speed * 0.0007)), 0);
+      this.updateCamera();
+      if (this.cloudMesh) this.cloudMesh.rotation.y += 0.000025;
+      this.renderer.render(this.scene, this.camera);
+    }
+  }
+
+  let activeRenderer = null;
+  window.BSPThreeFlight = {
+    available: true,
+    get renderer() { return activeRenderer; },
+    init(canvas) {
+      if (!activeRenderer) activeRenderer = new BSPThreeFlight(canvas);
+      return activeRenderer;
+    },
+    update(vessel, editor) {
+      if (activeRenderer) activeRenderer.update(vessel, editor);
+    },
+    setVolumetric(value) { if (activeRenderer) activeRenderer.volumetric = !!value; }
+  };
+} catch (error) {
+  window.BSPThreeFlightError = String(error && error.message || error);
+  console.warn('BSP Three.js flight renderer unavailable; using the lightweight fallback.', error);
+}
 </script>
 
 </body>
