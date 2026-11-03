@@ -1,4 +1,4 @@
-/* Low-poly 3D editor. The editor uses perspective projection plus triangle
+/* Procedural 3D editor. The editor uses perspective projection plus triangle
    ray tests, node snapping, and transform gizmos; no external 3D library. */
 (function () {
   'use strict';
@@ -26,18 +26,25 @@
       this.rootId = null;
       this.mode = 'place';
       this.template = null;
-      this.camera = { yaw: 0.78, pitch: 0.28, distance: 23, target: [0, 5, 0] };
+      this.camera = { yaw: 0.78, pitch: 0.28, distance: 23, target: [0, 2, 0] };
+      this.spaceplaneWorkspace = false;
       this.drag = null;
+      this.pointerPosition = null;
       this.snap = true;
       this.showNodes = true;
       this.shaders = false;
+      // Scale mesh detail to device memory and CPU count. A 4 GB Chromebook
+      // gets the light preset; more capable machines receive smoother meshes.
+      const memoryGB = Number(navigator.deviceMemory || 4);
+      const cores = Number(navigator.hardwareConcurrency || 4);
+      this.baseQualitySegments = Math.max(18, Math.min(24, Math.round(Math.min(memoryGB, 8) * 2.6 + Math.min(cores, 8) * 0.35)));
+      this.highQualitySegments = Math.min(32, this.baseQualitySegments + 8);
       this.geometryCache = new Map();
       this.idCounter = 1;
       this.resizeObserver = new ResizeObserver(() => this.resize());
       this.resizeObserver.observe(canvas);
       this.resize();
       this.bindEvents();
-      this.loadDefaultCraft();
       this.render();
     }
 
@@ -70,8 +77,16 @@
       this.render();
     }
 
+    setWorkspace(spaceplane) {
+      this.spaceplaneWorkspace = !!spaceplane;
+      this.camera.yaw = this.spaceplaneWorkspace ? 0.78 : 0.78;
+      this.camera.pitch = this.spaceplaneWorkspace ? 0.12 : 0.28;
+      this.render();
+    }
+
     setTemplate(key, definition = null) {
       this.template = definition || P.byKey[key] || null;
+      this.pointerPosition = null;
       this.render();
     }
 
@@ -80,27 +95,14 @@
       if (!def) return null;
       const item = {
         id: 'part-' + this.idCounter++, key, name: def.name, definition: definition ? P.clone(def) : null,
-        position: position.slice(), rotation: rotation.slice(), parentId,
+        position: position.slice(), rotation: rotation.slice(), parentId, deployed: def.defaultDeployed ?? true,
         stage: def.stage || 0, enabled: true
       };
       this.parts.push(item);
-      if (!this.rootId) this.rootId = item.id;
+      if (!this.rootId || def.category === 'Command') this.rootId = item.id;
       this.selectedId = item.id;
       this.changed();
       return item;
-    }
-
-    loadDefaultCraft() {
-      this.parts = [];
-      this.idCounter = 1;
-      const engine = this.addPart('engine3', [0, 1.3, 0]);
-      const separator = this.addPart('decoupler', [0, 2.81, 0], [0, 0, 0], engine.id);
-      const tank = this.addPart('tankM', [0, 5.62, 0], [0, 0, 0], separator.id);
-      const pod = this.addPart('pod1', [0, 9.42, 0], [0, 0, 0], tank.id);
-      this.rootId = pod.id;
-      this.selectedId = pod.id;
-      this.camera.target = [0, 5.3, 0];
-      this.changed();
     }
 
     getDefinition(item) {
@@ -134,8 +136,8 @@
     geometryFor(item) {
       const def = this.getDefinition(item);
       if (!def) return [];
-      const cacheKey = item.key + ':' + (def.sweep || 0) + ':' + def.width + ':' + def.height;
-      if (!this.geometryCache.has(cacheKey)) this.geometryCache.set(cacheKey, P.makeGeometry(def, this.shaders ? 12 : 8));
+      const cacheKey = [item.key, def.shape, def.width, def.height, def.depth, def.sweep || 0, def.dihedral || 0, def.camber || 0, def.control || 0, def.airfoilThickness || 0, def.airfoilProfile || '', def.planform || '', def.incidence || 0, item.deployed, JSON.stringify(def.profile || null)].join(':');
+      if (!this.geometryCache.has(cacheKey)) this.geometryCache.set(cacheKey, P.makeGeometry({ ...def, deployed: item.deployed }, this.shaders ? this.highQualitySegments : this.baseQualitySegments));
       return this.geometryCache.get(cacheKey);
     }
 
@@ -146,8 +148,12 @@
       const eye = vec.add(c.target, vec.mul(offset, c.distance));
       const forward = vec.norm(vec.sub(c.target, eye));
       const right = vec.norm([cy, 0, -sy]);
-      const up = vec.norm(vec.cross(right, forward));
-      return { eye, forward, right, up };
+      const baseUp = vec.norm(vec.cross(right, forward));
+      const roll = this.spaceplaneWorkspace ? Math.PI / 2 : 0;
+      const cr = Math.cos(roll), sr = Math.sin(roll);
+      const rolledRight = vec.add(vec.mul(right, cr), vec.mul(baseUp, sr));
+      const rolledUp = vec.add(vec.mul(baseUp, cr), vec.mul(right, -sr));
+      return { eye, forward, right: rolledRight, up: rolledUp };
     }
 
     project(point) {
@@ -192,7 +198,11 @@
         for (const tri of this.geometryFor(item)) {
           const world = tri.map(p => this.partWorldPoint(item, p));
           const hit = this.intersectTriangle(ray, world[0], world[1], world[2]);
-          if (hit && (!nearest || hit.t < nearest.t)) nearest = { ...hit, item };
+          if (hit && (!nearest || hit.t < nearest.t)) {
+            let normal = vec.norm(vec.cross(vec.sub(world[1], world[0]), vec.sub(world[2], world[0])));
+            if (vec.dot(normal, ray.direction) > 0) normal = vec.mul(normal, -1);
+            nearest = { ...hit, item, normal };
+          }
         }
       }
       return nearest;
@@ -205,40 +215,75 @@
       return vec.add(ray.origin, vec.mul(ray.direction, t));
     }
 
+    previewPlacement(px, py) {
+      if (!this.template) return null;
+      const ray = this.rayFromScreen(px, py);
+      const hit = this.raycast(px, py);
+      const point = hit ? hit.point : this.intersectGround(ray);
+      if (!point) return null;
+      let position = point.slice();
+      let rotation = [0, 0, 0];
+      let parentId = hit ? hit.item.id : null;
+      let centerSnapped = false;
+      if (hit && this.snap) {
+        const parent = hit.item;
+        const parentDef = this.getDefinition(parent);
+        const parentNodes = parentDef.nodes || [];
+        const childNodes = this.template.nodes || [];
+        const normalOf = node => node.normal || (node.type === 'top' ? [0, 1, 0] : node.type === 'bottom' ? [0, -1, 0] : null);
+        let best = null;
+        for (const pn of parentNodes) for (const cn of childNodes) {
+          const stackPair = (pn.type === 'top' && cn.type === 'bottom') || (pn.type === 'bottom' && cn.type === 'top');
+        if (!stackPair) continue;
+          const parentNormal = normalOf(pn), childNormal = normalOf(cn);
+          if (parentNormal && childNormal && vec.dot(vec.norm(this.rotate(parentNormal, parent.rotation)), vec.norm(this.rotate(childNormal, parent.rotation))) > -0.75) continue;
+          const worldPoint = this.partWorldPoint(parent, pn.p);
+          const distance = vec.len(vec.sub(worldPoint, point));
+          if (!best || distance < best.distance) best = { pn, cn, worldPoint, distance, normal: parentNormal };
+        }
+        const snapThreshold = Math.max(0.28, Math.min(0.7, Math.min(parentDef.width, parentDef.depth) * 0.22));
+        if (best && best.distance <= snapThreshold) {
+          rotation = parent.rotation.slice();
+          const childAnchor = this.rotate(best.cn.p, rotation);
+          const outward = best.normal ? vec.norm(this.rotate(best.normal, parent.rotation)) : [0, 0, 0];
+          position = vec.sub(vec.sub(best.worldPoint, childAnchor), vec.mul(outward, 0.012));
+          centerSnapped = true;
+        }
+      }
+      if (hit && !centerSnapped) {
+        const normal = hit.normal || vec.mul(ray.direction, -1);
+        const surfaceNodes = (this.template.nodes || []).filter(node => node.type === 'surface' && node.normal);
+        let radialAnchor = null;
+        for (const node of surfaceNodes) {
+          const nodeNormal = vec.norm(this.rotate(node.normal, rotation));
+          const alignment = vec.dot(nodeNormal, normal);
+          if (!radialAnchor || alignment < radialAnchor.alignment) radialAnchor = { node, alignment };
+        }
+        if (radialAnchor && radialAnchor.alignment < -0.25) {
+          position = vec.sub(vec.add(point, vec.mul(normal, 0.012)), this.rotate(radialAnchor.node.p, rotation));
+        } else {
+          const localNormal = this.rotate(normal, [-rotation[0], -rotation[1], -rotation[2]]);
+          const radialShape = ['cylinder', 'capsule', 'engine', 'cone'].includes(this.template.shape);
+          const support = radialShape
+            ? Math.hypot(localNormal[0] * this.template.width / 2, localNormal[2] * this.template.depth / 2) + Math.abs(localNormal[1]) * this.template.height / 2
+            : Math.abs(localNormal[0]) * this.template.width / 2 + Math.abs(localNormal[1]) * this.template.height / 2 + Math.abs(localNormal[2]) * this.template.depth / 2;
+          position = vec.add(point, vec.mul(normal, support + 0.012));
+        }
+      }
+      if (!hit && this.parts.length === 0) position = [point[0], this.template.height / 2, point[2]];
+      return { position, rotation, parentId, hit };
+    }
+
     placeAt(px, py) {
       if (!this.template) {
         const hit = this.raycast(px, py);
         if (hit) { this.selectedId = hit.item.id; this.changed(); }
         return;
       }
-      const ray = this.rayFromScreen(px, py);
-      const hit = this.raycast(px, py);
-      const point = hit ? hit.point : this.intersectGround(ray);
-      if (!point) return;
-      let parentId = hit ? hit.item.id : null;
-      let position = point.slice();
-      let rotation = [0, 0, 0];
-      if (hit && this.snap) {
-        const parent = hit.item;
-        const parentDef = this.getDefinition(parent);
-        const childDef = this.template;
-        const parentNodes = parentDef.nodes || [];
-        const childNodes = childDef.nodes || [];
-        if (parentNodes.length && childNodes.length) {
-          let parentNode = null, bestParent = Infinity;
-          for (const node of parentNodes) {
-            const wp = this.partWorldPoint(parent, node.p);
-            const dist = vec.len(vec.sub(wp, point));
-            if (dist < bestParent) { bestParent = dist; parentNode = { ...node, wp }; }
-          }
-          const preferredType = parentNode && parentNode.type === 'top' ? 'bottom' : parentNode && parentNode.type === 'bottom' ? 'top' : null;
-          let childNode = childNodes.find(n => n.type === preferredType) || childNodes[0];
-          const rotated = this.rotate(childNode.p, rotation);
-          position = vec.sub(parentNode.wp, rotated);
-        }
-      }
+      const placement = this.previewPlacement(px, py);
+      if (!placement) return;
       const customDefinition = P.byKey[this.template.key] ? null : this.template;
-      const created = this.addPart(this.template.key, position, rotation, parentId, customDefinition);
+      const created = this.addPart(this.template.key, placement.position, placement.rotation, placement.parentId, customDefinition);
       if (created && this.mode === 'place') this.template = null;
     }
 
@@ -246,6 +291,28 @@
       const center = this.project(item.position);
       if (!center) return null;
       const axes = [[1, 0, 0], [0, 1, 0], [0, 0, 1]];
+      if (this.mode === 'rotate') {
+        let ringHit = null;
+        for (let axisIndex = 0; axisIndex < axes.length; axisIndex++) {
+          const points = [];
+          for (let i = 0; i <= 40; i++) {
+            const a = i / 40 * Math.PI * 2;
+            let local;
+            if (axisIndex === 0) local = [0, Math.cos(a) * 1.5, Math.sin(a) * 1.5];
+            else if (axisIndex === 1) local = [Math.cos(a) * 1.5, 0, Math.sin(a) * 1.5];
+            else local = [Math.cos(a) * 1.5, Math.sin(a) * 1.5, 0];
+            const projected = this.project(vec.add(item.position, local));
+            if (projected) points.push(projected);
+          }
+          for (let i = 1; i < points.length; i++) {
+            const a = points[i - 1], b = points[i], dx = b.x - a.x, dy = b.y - a.y;
+            const t = clamp(((px - a.x) * dx + (py - a.y) * dy) / Math.max(1, dx * dx + dy * dy), 0, 1);
+            const distance = Math.hypot(px - a.x - t * dx, py - a.y - t * dy);
+            if (distance < 13 && (!ringHit || distance < ringHit.dist)) ringHit = { axis: axes[axisIndex], axisIndex, center, endpoint: b, dist: distance };
+          }
+        }
+        return ringHit;
+      }
       let best = null;
       for (let i = 0; i < axes.length; i++) {
         const endpoint = this.project(vec.add(item.position, vec.mul(axes[i], 2.5)));
@@ -256,7 +323,6 @@
         const dist = Math.hypot(px - center.x - t * dx, py - center.y - t * dy);
         if (dist < 18 && (!best || dist < best.dist)) best = { axis: axes[i], axisIndex: i, center, endpoint, dist };
       }
-      if (!best && Math.hypot(px - center.x, py - center.y) < 32) best = { axis: [0, 1, 0], axisIndex: 1, center, endpoint: center, dist: 32 };
       return best;
     }
 
@@ -269,8 +335,47 @@
         this.canvas.setPointerCapture(e.pointerId);
         return;
       }
-      if (this.mode === 'place') { this.placeAt(px, py); return; }
+      if (this.mode === 'place' && this.template) {
+        this.pointerPosition = [px, py];
+        this.drag = { kind: 'place', x: px, y: py, lastX: px, lastY: py };
+        this.canvas.setPointerCapture(e.pointerId);
+        this.render();
+        return;
+      }
+      if (this.mode === 'place') {
+        const placeHit = this.raycast(px, py);
+        if (placeHit) {
+          this.selectedId = placeHit.item.id;
+          this.drag = { kind: 'offset', freeMove: true, x: px, y: py, startPosition: placeHit.item.position.slice(), startRotation: placeHit.item.rotation.slice() };
+          this.canvas.setPointerCapture(e.pointerId);
+          this.changed();
+          return;
+        }
+        this.drag = { kind: 'pan2d', x: px, y: py, target: this.camera.target.slice() };
+        this.canvas.setPointerCapture(e.pointerId);
+        return;
+      }
+      if (this.mode === 'offset' || this.mode === 'rotate') {
+        const alreadySelected = this.selectedPart();
+        if (alreadySelected) {
+          const handle = this.findGizmo(px, py, alreadySelected);
+          if (handle) {
+            this.drag = {
+              kind: this.mode, x: px, y: py, startPosition: alreadySelected.position.slice(), startRotation: alreadySelected.rotation.slice(),
+              axis: handle.axis, axisIndex: handle.axisIndex,
+              axisScreen: handle.endpoint && handle.center ? [handle.endpoint.x - handle.center.x, handle.endpoint.y - handle.center.y] : [0, -1]
+            };
+            this.canvas.setPointerCapture(e.pointerId);
+            return;
+          }
+        }
+      }
       const hit = this.raycast(px, py);
+      if (!hit) {
+        this.drag = { kind: 'pan2d', x: px, y: py, target: this.camera.target.slice() };
+        this.canvas.setPointerCapture(e.pointerId);
+        return;
+      }
       if (this.mode === 'root') {
         if (hit) { this.rootId = hit.item.id; this.selectedId = hit.item.id; this.changed(); }
         return;
@@ -288,16 +393,32 @@
           this.changed();
           return;
         }
+        this.drag = { kind: this.mode, freeMove: this.mode === 'offset', x: px, y: py, startPosition: selected.position.slice(), startRotation: selected.rotation.slice(), axis: [0, 1, 0], axisIndex: 1, axisScreen: [0, -1] };
+        this.canvas.setPointerCapture(e.pointerId);
+        this.changed();
+        return;
       }
       this.changed();
     }
 
     pointerMove(e) {
-      if (!this.drag) return;
       const rect = this.canvas.getBoundingClientRect();
       const dpr = this.width / rect.width;
       const px = (e.clientX - rect.left) * dpr, py = (e.clientY - rect.top) * dpr;
+      if (this.template) this.pointerPosition = [px, py];
+      if (!this.drag) { if (this.template) this.render(); return; }
       const dx = px - this.drag.x, dy = py - this.drag.y;
+      if (this.drag.kind === 'place') {
+        this.drag.lastX = px; this.drag.lastY = py;
+        this.render();
+        return;
+      }
+      if (this.drag.kind === 'pan2d') {
+        const worldPerPixel = this.camera.distance / Math.min(this.width, this.height) * 1.8;
+        this.camera.target = [this.drag.target[0] - dx * worldPerPixel, this.drag.target[1] + dy * worldPerPixel, this.drag.target[2]];
+        this.render();
+        return;
+      }
       if (this.drag.kind === 'camera') {
         this.camera.yaw = this.drag.yaw - dx * 0.006;
         this.camera.pitch = clamp(this.drag.pitch + dy * 0.006, -1.25, 1.25);
@@ -307,13 +428,21 @@
       const item = this.selectedPart();
       if (!item) return;
       if (this.drag.kind === 'offset') {
-        const screenAxis = this.drag.axisScreen;
-        const l = Math.hypot(screenAxis[0], screenAxis[1]) || 1;
-        const amountPx = (dx * screenAxis[0] + dy * screenAxis[1]) / l;
         const worldPerPixel = this.camera.distance / Math.min(this.width, this.height) * 1.6;
-        let amount = amountPx * worldPerPixel;
-        if (this.snap) amount = Math.round(amount * 10) / 10;
-        const nextPosition = vec.add(this.drag.startPosition, vec.mul(this.drag.axis, amount));
+        let nextPosition;
+        if (this.drag.freeMove) {
+          const basis = this.cameraBasis();
+          let delta = vec.add(vec.mul(basis.right, dx * worldPerPixel), vec.mul(basis.up, -dy * worldPerPixel));
+          if (this.snap) delta = delta.map(value => Math.round(value * 10) / 10);
+          nextPosition = vec.add(this.drag.startPosition, delta);
+        } else {
+          const screenAxis = this.drag.axisScreen;
+          const l = Math.hypot(screenAxis[0], screenAxis[1]) || 1;
+          const amountPx = (dx * screenAxis[0] + dy * screenAxis[1]) / l;
+          let amount = amountPx * worldPerPixel;
+          if (this.snap) amount = Math.round(amount * 10) / 10;
+          nextPosition = vec.add(this.drag.startPosition, vec.mul(this.drag.axis, amount));
+        }
         const delta = vec.sub(nextPosition, this.drag.startPosition);
         item.position = nextPosition;
         for (const child of this.descendantsOf(item.id)) child.position = vec.add(child.position, delta);
@@ -332,6 +461,10 @@
     }
 
     pointerUp() {
+      if (this.drag && this.drag.kind === 'place') {
+        this.placeAt(this.drag.lastX, this.drag.lastY);
+        this.pointerPosition = null;
+      }
       if (this.drag && this.drag.kind !== 'camera') this.changed();
       this.drag = null;
     }
@@ -368,9 +501,10 @@
     setWingValue(property, value) {
       const item = this.selectedPart();
       if (!item) return;
-      const def = this.getDefinition(item);
+      let def = this.getDefinition(item);
       if (!def || !('wingArea' in def)) return;
-      def[property] = Number(value);
+      if (!item.definition) { item.definition = P.clone(def); def = item.definition; }
+      def[property] = property === 'airfoilProfile' ? String(value) : Number(value);
       this.geometryCache.clear();
       this.changed();
     }
@@ -396,7 +530,12 @@
     load(serialized) {
       const data = typeof serialized === 'string' ? JSON.parse(serialized) : serialized;
       if (!data || !Array.isArray(data.parts) || data.parts.length > 300) throw new Error('Invalid craft file.');
-      this.parts = data.parts.map(p => ({ ...p, position: p.position.map(Number), rotation: p.rotation.map(Number) }));
+      this.parts = data.parts.map(p => {
+        const item = { ...p, position: p.position.map(Number), rotation: p.rotation.map(Number) };
+        const def = item.definition || P.byKey[item.key];
+        if (item.deployed == null) item.deployed = def?.defaultDeployed ?? true;
+        return item;
+      });
       this.rootId = data.rootId || (this.parts[0] && this.parts[0].id);
       this.idCounter = Math.max(Number(data.idCounter) || 1, this.parts.length + 1);
       this.selectedId = this.rootId;
@@ -405,7 +544,7 @@
 
     drawGrid() {
       const ctx = this.ctx;
-      ctx.strokeStyle = '#777f80'; ctx.lineWidth = 1;
+      ctx.strokeStyle = '#9db0bd'; ctx.lineWidth = 1;
       for (let n = -12; n <= 12; n++) {
         const a = this.project([n, 0, -12]), b = this.project([n, 0, 12]);
         const c = this.project([-12, 0, n]), d = this.project([12, 0, n]);
@@ -415,7 +554,7 @@
       ctx.globalAlpha = 1;
       const origin = this.project([0, 0, 0]);
       if (origin) {
-        ctx.fillStyle = '#5b6b70'; ctx.fillRect(origin.x - 2, origin.y - 2, 4, 4);
+        ctx.fillStyle = '#159dcc'; ctx.fillRect(origin.x - 2, origin.y - 2, 4, 4);
       }
     }
 
@@ -467,17 +606,20 @@
     render() {
       if (!this.ctx || !this.width || !this.height) return;
       const ctx = this.ctx;
-      ctx.fillStyle = '#859194'; ctx.fillRect(0, 0, this.width, this.height);
+      ctx.fillStyle = '#edf2f6'; ctx.fillRect(0, 0, this.width, this.height);
       const sky = ctx.createLinearGradient(0, 0, 0, this.height);
-      sky.addColorStop(0, '#6d777a'); sky.addColorStop(1, '#a0a7a3');
+      sky.addColorStop(0, '#e4edf3'); sky.addColorStop(1, '#f5f8fa');
       ctx.fillStyle = sky; ctx.fillRect(0, 0, this.width, this.height);
       this.drawGrid();
 
       const faces = [];
+      const cameraEye = this.cameraBasis().eye;
       for (const item of this.parts) {
         const def = this.getDefinition(item);
         if (!def) continue;
-        for (const tri of this.geometryFor(item)) {
+        const geometry = this.geometryFor(item);
+        for (let triIndex = 0; triIndex < geometry.length; triIndex++) {
+          const tri = geometry[triIndex];
           const world = tri.map(p => this.partWorldPoint(item, p));
           const projected = world.map(p => this.project(p));
           if (projected.some(p => !p)) continue;
@@ -493,11 +635,32 @@
         const light = this.shaders ? Math.min(1.3, face.light * 1.1) : face.light;
         const color = 'rgb(' + rgb.map(n => Math.round(clamp(n * light, 0, 255))).join(',') + ')';
         ctx.fillStyle = color;
-        ctx.strokeStyle = face.selected ? '#fff8a8' : 'rgba(28,37,39,.55)';
-        ctx.lineWidth = face.selected ? 1.7 : 0.8;
+        ctx.strokeStyle = '#159dcc';
+        ctx.lineWidth = 1.5;
         ctx.beginPath(); ctx.moveTo(face.projected[0].x, face.projected[0].y);
         ctx.lineTo(face.projected[1].x, face.projected[1].y); ctx.lineTo(face.projected[2].x, face.projected[2].y);
-        ctx.closePath(); ctx.fill(); ctx.stroke();
+        ctx.closePath(); ctx.fill();
+        if (face.selected) ctx.stroke();
+      }
+
+      if (this.template && this.pointerPosition) {
+        const placement = this.previewPlacement(this.pointerPosition[0], this.pointerPosition[1]);
+        if (placement) {
+          const ghostItem = { position: placement.position, rotation: placement.rotation };
+          const ghostGeometry = P.makeGeometry({ ...this.template, deployed: this.template.defaultDeployed ?? true }, this.baseQualitySegments);
+          ctx.save();
+          for (const tri of ghostGeometry) {
+            const projected = tri.map(p => this.project(this.partWorldPoint(ghostItem, p)));
+            if (projected.some(p => !p)) continue;
+            ctx.beginPath(); ctx.moveTo(projected[0].x, projected[0].y);
+            ctx.lineTo(projected[1].x, projected[1].y); ctx.lineTo(projected[2].x, projected[2].y); ctx.closePath();
+            ctx.fillStyle = 'rgba(21,157,204,.3)'; ctx.strokeStyle = 'rgba(10,115,155,.55)'; ctx.lineWidth = 0.7;
+            ctx.fill(); ctx.stroke();
+          }
+          const anchor = this.project(placement.position);
+          if (anchor) { ctx.strokeStyle = '#159dcc'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(anchor.x, anchor.y, 8, 0, Math.PI * 2); ctx.stroke(); }
+          ctx.restore();
+        }
       }
 
       const selected = this.selectedPart();
@@ -506,10 +669,11 @@
         for (const item of this.parts) {
           const def = this.getDefinition(item);
           for (const node of (def && def.nodes) || []) {
+            if (node.type !== 'top' && node.type !== 'bottom') continue;
             const p = this.project(this.partWorldPoint(item, node.p));
             if (!p) continue;
-            ctx.fillStyle = item.id === this.selectedId ? '#fff2a4' : '#74e3df';
-            ctx.strokeStyle = '#17292e'; ctx.lineWidth = 1;
+            ctx.fillStyle = item.id === this.selectedId ? '#ffffff' : '#55bfd5';
+            ctx.strokeStyle = item.id === this.selectedId ? '#159dcc' : '#345c71'; ctx.lineWidth = 1.25;
             ctx.beginPath(); ctx.arc(p.x, p.y, item.id === this.selectedId ? 4 : 3, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
           }
         }

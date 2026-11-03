@@ -35,6 +35,21 @@
   const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
   const len = a => Math.sqrt(dot(a, a));
   const norm = a => { const l = len(a) || 1; return mul(a, 1 / l); };
+  const rotateAroundAxis = (vector, axis, angle) => {
+    const k = norm(axis), c = Math.cos(angle), s = Math.sin(angle);
+    return add(add(mul(vector, c), mul(cross(k, vector), s)), mul(k, dot(k, vector) * (1 - c)));
+  };
+
+  function ensureAttitude(v) {
+    if (v.attitude && v.attitude.right && v.attitude.up && v.attitude.forward) return v.attitude;
+    const up = norm(v.heading || [0, 1, 0]);
+    let reference = [0, 0, -1];
+    if (Math.abs(dot(up, reference)) > 0.92) reference = [1, 0, 0];
+    const right = norm(cross(reference, up));
+    const forward = norm(cross(up, right));
+    v.attitude = { right, up, forward };
+    return v.attitude;
+  }
 
   function solveKepler(M, e) {
     let E = M;
@@ -67,21 +82,36 @@
 
   function makeVessel(parts, definitions) {
     const defs = definitions || window.BSPParts.byKey;
-    let dryMass = 0, fuel = 0, thrust = 0, ispWeighted = 0, wingArea = 0, camber = 0;
+    let dryMass = 0, fuel = 0, thrust = 0, rocketThrust = 0, airThrust = 0, rocketIspWeighted = 0, airIspWeighted = 0, wingArea = 0, camber = 0, maxFrontalArea = 0;
     for (const item of parts) {
       const d = item.definition || defs[item.key];
       if (!d) continue;
       dryMass += d.mass || 0;
       fuel += d.fuel || 0;
-      if (d.thrust > 0) { thrust += Math.min(d.thrust, window.BSPParts.MAX_ENGINE_THRUST_KN); ispWeighted += d.isp * d.thrust; }
+      if (d.thrust > 0) {
+        const cappedPartThrust = Math.min(d.thrust, window.BSPParts.MAX_ENGINE_THRUST_KN);
+        thrust += cappedPartThrust;
+        if (d.airbreathing) { airThrust += cappedPartThrust; airIspWeighted += (d.isp || 1) * cappedPartThrust; }
+        else { rocketThrust += cappedPartThrust; rocketIspWeighted += (d.isp || 1) * cappedPartThrust; }
+      }
       if (d.wingArea) { wingArea += d.wingArea; camber += d.camber || 0; }
+      maxFrontalArea = Math.max(maxFrontalArea, Math.max(0.1, d.width * d.depth));
     }
     return {
       body: 'Kerbin', position: [0, bodies.Kerbin.radius + 2, 0], velocity: [0, 0, 0],
-      heading: [0, 1, 0], dryMass: Math.max(1, dryMass), fuel, fuelStart: fuel,
+      heading: [0, 1, 0], attitude: { right: [1, 0, 0], up: [0, 1, 0], forward: [0, 0, -1] }, dryMass: Math.max(1, dryMass), fuel, fuelStart: fuel,
       thrustKN: Math.min(thrust, window.BSPParts.MAX_ENGINE_THRUST_KN),
-      isp: thrust ? ispWeighted / thrust : 0, wingArea, camber: wingArea ? camber / Math.max(1, parts.filter(p => (p.definition || defs[p.key])?.wingArea).length) : 0,
+      rocketThrustKN: rocketThrust, airbreathingThrustKN: airThrust,
+      rocketIsp: rocketThrust ? rocketIspWeighted / rocketThrust : 0,
+      airbreathingIsp: airThrust ? airIspWeighted / airThrust : 0,
+      airbreathingMinDensity: parts.reduce((minimum, item) => { const d = item.definition || defs[item.key]; return d && d.airbreathing && d.thrust ? Math.min(minimum, Number(d.minAirDensity || 0)) : minimum; }, Infinity) === Infinity ? 0 : parts.reduce((minimum, item) => { const d = item.definition || defs[item.key]; return d && d.airbreathing && d.thrust ? Math.min(minimum, Number(d.minAirDensity || 0)) : minimum; }, Infinity),
+      airbreathingEngines: parts.map(item => { const d = item.definition || defs[item.key]; return d && d.airbreathing && d.thrust ? { thrust: Math.min(d.thrust, window.BSPParts.MAX_ENGINE_THRUST_KN), minAirDensity: Number(d.minAirDensity || 0), minSpeed: Number(d.minSpeed || 0) } : null; }).filter(Boolean),
+      isp: rocketThrust ? rocketIspWeighted / rocketThrust : (airThrust ? airIspWeighted / airThrust : 0),
+      wingArea, camber: wingArea ? camber / Math.max(1, parts.filter(p => (p.definition || defs[p.key])?.wingArea).length) : 0,
+      dragArea: Math.max(0.8, maxFrontalArea * 0.62) + wingArea * 0.035, dragCoefficient: 0.52,
+      dragParts: [], currentThrustKN: 0, isSpaceplane: false, launchClampsEngaged: false,
       engineActive: false, throttle: 0, sas: true, rcs: false, landed: true, stage: 0,
+      angularVelocity: [0, 0, 0], failureSeed: 0x13579bdf, destroyed: false, impactEvent: null,
       pitch: 0, yaw: 0, roll: 0, heat: 0, parachute: false, gear: true,
       apoapsis: 0, periapsis: 0, flightTime: 0, missionName: 'BSP-01'
     };
@@ -101,12 +131,23 @@
   }
 
   function stepVessel(v, dt, controls = {}) {
+    if (v.destroyed) return;
+    v.impactEvent = null;
     const body = bodies[v.body] || bodies.Kerbin;
     if (v.landed && !v.engineActive && !(controls.steerPitch || controls.steerYaw)) return;
     const throttle = clamp(controls.throttle ?? v.throttle, 0, 1);
     const pitchInput = controls.pitch || 0, yawInput = controls.yaw || 0, rollInput = controls.roll || 0;
-    const steps = Math.max(1, Math.min(24, Math.ceil(dt / 0.035)));
+    v.controlInputs = { pitch: pitchInput, yaw: yawInput, roll: rollInput };
+    const steps = Math.max(1, Math.min(60, Math.ceil(dt / 0.0125)));
     const h = dt / steps;
+    const dragSource = (v.parts || []).map(item => {
+      const def = item.definition || window.BSPParts.byKey[item.key];
+      if (!def) return null;
+      const frontal = def.wingArea ? def.wingArea * 0.075 : Math.max(def.width * def.depth, def.width * def.height * 0.62, def.depth * def.height * 0.62);
+      const coefficient = Number.isFinite(def.dragCoefficient) ? def.dragCoefficient : (def.shape === 'cone' || def.shape === 'cockpit' || def.shape === 'fairing' ? 0.16 : 0.42);
+      return { id: item.id, position: item.position.slice(), width: def.width, height: def.height, depth: def.depth, score: Math.max(0.01, frontal * coefficient), name: def.name };
+    }).filter(Boolean).sort((a, b) => b.score - a.score);
+    v.dragParts = dragSource.slice(0, 4);
 
     for (let i = 0; i < steps; i++) {
       const radius = len(v.position);
@@ -120,39 +161,74 @@
       v.landed = false;
       const g = mul(radial, -mu(body) / Math.max(1, radius * radius));
 
-      const rightAxis = norm(cross(v.heading, radial));
-      const pitchRate = pitchInput * 0.8;
-      const yawAxis = rightAxis[0] || rightAxis[1] || rightAxis[2] ? rightAxis : [0, 0, 1];
-      if (pitchRate || yawInput) {
-        const turn = norm(add(mul(cross(yawAxis, v.heading), pitchRate * h), mul(cross(radial, v.heading), yawInput * h)));
-        v.heading = norm(add(v.heading, turn));
-      }
-      v.roll += rollInput * h;
+      const responsiveness = 1 - Math.exp(-h * 4.2);
+      v.angularVelocity = v.angularVelocity || [0, 0, 0];
+      v.angularVelocity[0] += (pitchInput * 0.34 - v.angularVelocity[0]) * responsiveness;
+      v.angularVelocity[1] += (yawInput * 0.34 - v.angularVelocity[1]) * responsiveness;
+      v.angularVelocity[2] += (rollInput * 0.48 - v.angularVelocity[2]) * responsiveness;
+      const attitude = ensureAttitude(v);
+      let rightAxis = attitude.right.slice(), upAxis = attitude.up.slice(), forwardAxis = attitude.forward.slice();
+      const pitchAngle = -v.angularVelocity[0] * h;
+      upAxis = rotateAroundAxis(upAxis, rightAxis, pitchAngle);
+      forwardAxis = rotateAroundAxis(forwardAxis, rightAxis, pitchAngle);
+      const yawAngle = v.angularVelocity[1] * h;
+      upAxis = rotateAroundAxis(upAxis, forwardAxis, yawAngle);
+      rightAxis = rotateAroundAxis(rightAxis, forwardAxis, yawAngle);
+      const rollAngle = v.angularVelocity[2] * h;
+      rightAxis = rotateAroundAxis(rightAxis, upAxis, rollAngle);
+      forwardAxis = rotateAroundAxis(forwardAxis, upAxis, rollAngle);
+      rightAxis = norm(cross(forwardAxis, upAxis));
+      forwardAxis = norm(cross(upAxis, rightAxis));
+      v.attitude = { right: rightAxis, up: norm(upAxis), forward: forwardAxis };
+      v.heading = v.attitude.up.slice();
+      v.roll = (v.roll + v.angularVelocity[2] * h) % (Math.PI * 2);
 
       const speed = len(v.velocity);
       const rho = atmosphereDensity(body, altitude);
-      const cdArea = v.wingArea > 0 ? Math.max(0.25, v.wingArea * 0.08) : 0.8;
-      let aero = [0, 0, 0];
+      const cdArea = Math.max(0.35, (v.dragArea || 1.2) * (v.dragCoefficient || 0.52));
+      let aero = [0, 0, 0], dragAcceleration = 0, liftAcceleration = 0;
       if (rho > 0 && speed > 0.1) {
         const dragMagnitude = 0.5 * rho * speed * speed * cdArea / Math.max(1, v.dryMass + v.fuel);
+        dragAcceleration = dragMagnitude;
         aero = add(aero, mul(norm(v.velocity), -dragMagnitude));
         if (v.wingArea > 0) {
-          const liftDirection = norm(sub(radial, mul(norm(v.velocity), dot(radial, norm(v.velocity)))));
-          const cl = clamp(0.18 + (v.camber || 0) * 0.035 + Math.abs(v.pitch) * 0.08, -0.2, 1.4);
-          const liftMagnitude = 0.5 * rho * speed * speed * v.wingArea * cl / Math.max(1, v.dryMass + v.fuel);
-          aero = add(aero, mul(liftDirection, liftMagnitude));
+          const flow = norm(v.velocity);
+          const bodyUp = sub(radial, mul(flow, dot(radial, flow)));
+          if (len(bodyUp) > 0.02) {
+            const liftDirection = norm(bodyUp);
+            const alpha = Math.asin(clamp(dot(norm(v.heading), liftDirection), -1, 1));
+            const cl = clamp((v.camber || 0) * 0.018 + alpha * 3.5, -0.65, 1.8);
+            const liftMagnitude = 0.5 * rho * speed * speed * v.wingArea * cl / Math.max(1, v.dryMass + v.fuel);
+            liftAcceleration = liftMagnitude;
+            aero = add(aero, mul(liftDirection, liftMagnitude));
+          }
         }
       }
 
       let thrustVector = [0, 0, 0];
       const mass = Math.max(1, v.dryMass + v.fuel);
+      let activeRocketThrust = 0, activeAirThrust = 0;
       if (v.engineActive && throttle > 0 && v.fuel > 0 && v.thrustKN > 0) {
-        const thrustN = v.thrustKN * 1000 * throttle;
-        thrustVector = mul(v.heading, thrustN / mass);
-        const flow = thrustN / (Math.max(1, v.isp) * G0);
-        v.fuel = Math.max(0, v.fuel - flow * h);
+        activeRocketThrust = Math.min(v.rocketThrustKN || 0, window.BSPParts.MAX_ENGINE_THRUST_KN) * throttle;
+        const airSpeed = speed;
+        const airFactor = rho > 0 ? clamp(rho / 0.65, 0, 1) : 0;
+        const engines = v.airbreathingEngines || [];
+        activeAirThrust = engines.reduce((sum, engine) => {
+          if (rho < engine.minAirDensity || airSpeed < engine.minSpeed) return sum;
+          const speedFactor = engine.minSpeed <= 0
+            ? clamp(0.68 + airSpeed / 140 * 0.32, 0.68, 1)
+            : clamp((airSpeed - engine.minSpeed) / Math.max(80, engine.minSpeed + 150), 0, 1);
+          return sum + engine.thrust * airFactor * speedFactor;
+        }, 0) * throttle;
+        activeAirThrust = Math.min(activeAirThrust, Math.max(0, window.BSPParts.MAX_ENGINE_THRUST_KN - activeRocketThrust));
+        const totalThrustN = (activeRocketThrust + activeAirThrust) * 1000;
+        thrustVector = mul(v.heading, totalThrustN / mass);
+        const rocketFlow = activeRocketThrust > 0 ? activeRocketThrust * 1000 / (Math.max(1, v.rocketIsp || v.isp) * G0) : 0;
+        const airFlow = activeAirThrust > 0 ? activeAirThrust * 1000 / (Math.max(1, v.airbreathingIsp || v.isp) * G0) : 0;
+        v.fuel = Math.max(0, v.fuel - (rocketFlow + airFlow) * h);
         if (v.fuel <= 0.01) { v.fuel = 0; v.engineActive = false; }
       }
+      v.currentThrustKN = activeRocketThrust + activeAirThrust;
 
       const acceleration = add(add(g, aero), thrustVector);
       v.velocity = add(v.velocity, mul(acceleration, h));
@@ -160,13 +236,58 @@
       const newAltitude = len(v.position) - body.radius;
       v.flightTime += h;
       v.heat = Math.max(0, v.heat + (rho > 0 ? Math.pow(speed / 7000, 2) * rho * h * 0.015 : -h * 0.02));
+      v.gravityNow = len(g);
+      v.airDensityNow = rho;
+      v.dragAccelerationNow = dragAcceleration;
+      v.liftAccelerationNow = liftAcceleration;
+      v.dynamicPressureNow = 0.5 * rho * speed * speed;
+      const radialSpeedAfter = dot(v.velocity, norm(v.position));
+      if (altitude > 1200 && radialSpeedAfter > 80 && v.dynamicPressureNow > 130000) {
+        v.failureSeed ^= v.failureSeed << 13; v.failureSeed ^= v.failureSeed >>> 17; v.failureSeed ^= v.failureSeed << 5;
+        const roll = (v.failureSeed >>> 0) / 4294967295;
+        const pressureRisk = clamp((v.dynamicPressureNow - 130000) / 250000, 0, 1.1);
+        if (roll < pressureRisk * 0.018 * h) {
+          v.destroyed = true; v.engineActive = false; v.landed = false;
+          v.impactEvent = { type: 'airbreakup', speed: speed, dynamicPressure: v.dynamicPressureNow };
+          v.velocity = [0, 0, 0];
+          break;
+        }
+      }
+      if (!v.destroyed && v.engineActive && throttle >= 0.85) {
+        v.failureSeed ^= v.failureSeed << 13; v.failureSeed ^= v.failureSeed >>> 17; v.failureSeed ^= v.failureSeed << 5;
+        const engineRoll = (v.failureSeed >>> 0) / 4294967295;
+        const pressureStress = clamp((v.dynamicPressureNow - 40000) / 180000, 0, 1);
+        if (engineRoll < h * (0.00008 + pressureStress * 0.00045)) {
+          v.destroyed = true; v.engineActive = false; v.landed = false;
+          v.impactEvent = { type: 'engineFailure', speed, dynamicPressure: v.dynamicPressureNow };
+          v.velocity = [0, 0, 0];
+          break;
+        }
+      }
       if (newAltitude <= 0) {
         const rHat = norm(v.position);
-        v.position = mul(rHat, body.radius + 0.8);
-        const radialV = dot(v.velocity, rHat);
-        v.velocity = sub(v.velocity, mul(rHat, radialV));
-        if (len(v.velocity) < 12) { v.velocity = [0, 0, 0]; v.landed = true; v.engineActive = false; }
-        else { v.landed = true; v.engineActive = false; v.velocity = [0, 0, 0]; }
+        v.position = mul(rHat, body.radius + 1.1);
+        const radialImpact = Math.abs(dot(v.velocity, rHat));
+        const horizontalVelocity = sub(v.velocity, mul(rHat, dot(v.velocity, rHat)));
+        const horizontalSpeed = len(horizontalVelocity);
+        const totalImpact = len(v.velocity);
+        const gearDown = !!(v.gear || (v.parts || []).some(item => item.deployed !== false && (item.definition || window.BSPParts.byKey[item.key])?.deployable === 'gear'));
+        const touchdownLimit = gearDown ? 68 : 42;
+        const planeRoll = v.wingArea > 0 && gearDown && radialImpact < 24 && horizontalSpeed < 145;
+        if (radialImpact > touchdownLimit || (!planeRoll && totalImpact > (gearDown ? 96 : 62))) {
+          v.destroyed = true; v.engineActive = false; v.landed = false;
+          v.impactEvent = { type: 'ground', speed: totalImpact, verticalSpeed: radialImpact };
+          v.velocity = [0, 0, 0];
+          break;
+        }
+        v.velocity = horizontalVelocity;
+        if (planeRoll && v.engineActive && v.fuel > 0) {
+          v.landed = true;
+          const rollingFriction = Math.max(0, 1 - h * 0.045);
+          v.velocity = mul(v.velocity, rollingFriction);
+        } else {
+          v.velocity = [0, 0, 0]; v.landed = true; v.engineActive = false;
+        }
       }
     }
     v.throttle = throttle;
@@ -185,7 +306,7 @@
   }
 
   window.BSPPhysics = {
-    G, AU, G0, bodies, mu, clamp, add, sub, mul, dot, cross, len, norm,
+    G, AU, G0, bodies, mu, clamp, add, sub, mul, dot, cross, len, norm, rotateAroundAxis,
     solveKepler, bodyPosition, atmosphereDensity, makeVessel, stepVessel, orbitSummary, formatDistance
   };
 })();
